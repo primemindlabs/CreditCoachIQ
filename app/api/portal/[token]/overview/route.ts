@@ -20,7 +20,7 @@ export async function GET(req: Request, { params }: { params: { token: string } 
     // Real schema (migration 0002) is title/current_amount, not name/progress_amount —
     // the old select here silently errored on every load, so `goals` always came back
     // empty. Also pulling `id` so credit_report_uploads (score history) can be queried below.
-    sb.from('credit_repair_enrollments').select('id, current_score_exp, target_score, status').eq('borrower_id', borrowerId).eq('org_id', orgId).maybeSingle(),
+    sb.from('credit_repair_enrollments').select('id, current_score_exp, target_score, status, croa_disclosure_signed_at').eq('borrower_id', borrowerId).eq('org_id', orgId).maybeSingle(),
     sb.from('credit_stack_applications').select('approved_limit').eq('borrower_id', borrowerId).eq('org_id', orgId).eq('status', 'active'),
     sb.from('financial_goals').select('id, title, target_amount, current_amount, target_date').eq('borrower_id', borrowerId).eq('org_id', orgId),
     sb.from('intake_quiz_responses').select('status, recommended_plan_tier, completed_at').eq('borrower_id', borrowerId).eq('org_id', orgId).order('created_at', { ascending: false }).limit(1).maybeSingle(),
@@ -67,6 +67,7 @@ export async function GET(req: Request, { params }: { params: { token: string } 
     stageSince: borrower.journey_stage_updated_at,
     coachName,
     credit: enrollment ? { currentScore: enrollment.current_score_exp, targetScore: enrollment.target_score, status: enrollment.status } : null,
+    croaSigned: !!enrollment?.croa_disclosure_signed_at,
     scoreHistory,
     stackedCapital,
     goals: goals ?? [],

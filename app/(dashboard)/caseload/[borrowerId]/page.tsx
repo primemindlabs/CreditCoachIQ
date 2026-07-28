@@ -24,6 +24,14 @@ interface ClientDetail {
 
 interface StackSummary { capitalAvailable: number; activeApplicationCount: number; expiringWithin30Days: { lender_name: string }[]; }
 interface Dispute { id: string; bureau: string; letter_body: string; sent_at: string | null; response_status: string; credit_tradelines: { creditor_name: string } | null; }
+interface BillingInfo {
+  configured: boolean;
+  subscriptionStatus: string | null;
+  lastPaymentFailedAt: string | null;
+  lastPaymentFailureReason: string | null;
+  paymentRetryCount: number;
+  invoices: { id: string; number: string | null; status: string | null; amountDue: number; amountPaid: number; created: string; hostedInvoiceUrl: string | null }[];
+}
 
 const STAGES = ['credit_coaching', 'credit_stacking', 'loan_ready', 'handed_off', 'paused', 'exited'];
 
@@ -36,6 +44,7 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   const [data, setData] = useState<ClientDetail | null>(null);
   const [stack, setStack] = useState<StackSummary | null>(null);
   const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [billing, setBilling] = useState<BillingInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [callStatus, setCallStatus] = useState<string | null>(null);
   const [stageBusy, setStageBusy] = useState(false);
@@ -45,12 +54,14 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
     setLoading(true);
     const detail = await fetch(`/api/coach/client/${borrowerId}`).then((r) => r.json());
     setData(detail);
-    const [disputesRes, stackData] = await Promise.all([
+    const [disputesRes, stackData, billingData] = await Promise.all([
       detail.enrollment ? fetch(`/api/disputes?enrollment_id=${detail.enrollment.id}`).then((r) => r.json()) : Promise.resolve({ disputes: [] }),
       fetch(`/api/stacking/summary?borrower_id=${borrowerId}`).then((r) => r.json()),
+      fetch(`/api/billing/invoices?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : null)),
     ]);
     setDisputes(disputesRes.disputes ?? []);
     setStack(stackData);
+    setBilling(billingData);
     setLoading(false);
   }, [borrowerId]);
 
@@ -186,6 +197,37 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
                     <span className="text-muted">{d.response_status}</span>
                   ) : (
                     <button onClick={() => approveDispute(d.id)} className="rounded-control bg-money px-3 py-1.5 text-xs font-medium text-white hover:bg-money-hover">Approve & mail</button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {billing?.configured && (
+        <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-sm font-medium text-ink">Billing</p>
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${billing.subscriptionStatus === 'past_due' ? 'bg-terra-tint text-terra' : billing.subscriptionStatus === 'active' ? 'bg-money-tint text-money-hover' : 'bg-line text-muted'}`}>
+              {billing.subscriptionStatus?.replace('_', ' ') ?? '—'}
+            </span>
+          </div>
+          {billing.lastPaymentFailedAt && (
+            <div className="mb-4 rounded-control bg-terra-tint p-4 text-sm text-terra">
+              Payment failed {new Date(billing.lastPaymentFailedAt).toLocaleDateString()} ({billing.paymentRetryCount} attempt{billing.paymentRetryCount === 1 ? '' : 's'}). {billing.lastPaymentFailureReason}
+            </div>
+          )}
+          {billing.invoices.length === 0 ? (
+            <p className="text-sm text-muted">No invoices yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {billing.invoices.map((inv) => (
+                <div key={inv.id} className="flex items-center justify-between border-b border-line pb-2 text-sm last:border-0 last:pb-0">
+                  <span className="text-ink">{new Date(inv.created).toLocaleDateString()} {inv.number ? `· ${inv.number}` : ''}</span>
+                  <span className="text-muted">{currency(inv.amountPaid || inv.amountDue)} · {inv.status}</span>
+                  {inv.hostedInvoiceUrl && (
+                    <a href={inv.hostedInvoiceUrl} target="_blank" rel="noreferrer" className="text-money hover:underline">View</a>
                   )}
                 </div>
               ))}

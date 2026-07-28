@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Landmark, Phone, MessageCircle } from 'lucide-react';
+import { Landmark, Phone, MessageCircle, Check, Lock, PartyPopper, X } from 'lucide-react';
 import RadialScore from '@/components/ui/RadialScore';
 import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
@@ -14,6 +14,7 @@ interface Overview {
   stageSince: string;
   coachName: string | null;
   credit: { currentScore: number | null; targetScore: number | null; status: string } | null;
+  croaSigned: boolean;
   scoreHistory: { date: string; score: number }[];
   stackedCapital: number;
   goals: { id: string; title: string; target_amount: number; current_amount: number; target_date: string | null }[];
@@ -46,6 +47,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
   const [transactions, setTransactions] = useState<PlaidTx[]>([]);
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [celebration, setCelebration] = useState<{ type: 'score'; delta: number; score: number } | { type: 'goal'; title: string } | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,6 +63,36 @@ export default function PortalOverviewPage({ params }: { params: { token: string
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Milestone celebration — a real score increase (comparing the last two
+  // real report-upload scores) or a goal actually reaching its target.
+  // localStorage remembers what's already been celebrated per token/goal so
+  // this shows once, then recedes, per DESIGN_DIRECTION.md's spec.
+  useEffect(() => {
+    if (!data || typeof window === 'undefined') return;
+    const hist = data.scoreHistory;
+    if (hist.length >= 2) {
+      const latest = hist[hist.length - 1].score;
+      const previous = hist[hist.length - 2].score;
+      const key = `ccq_celebrated_score_${token}`;
+      const lastCelebrated = Number(window.localStorage.getItem(key) ?? '0');
+      if (latest > previous && latest > lastCelebrated) {
+        setCelebration({ type: 'score', delta: latest - previous, score: latest });
+        window.localStorage.setItem(key, String(latest));
+        return;
+      }
+    }
+    for (const g of data.goals) {
+      if (g.target_amount > 0 && g.current_amount >= g.target_amount) {
+        const key = `ccq_celebrated_goal_${g.id}`;
+        if (!window.localStorage.getItem(key)) {
+          setCelebration({ type: 'goal', title: g.title });
+          window.localStorage.setItem(key, '1');
+          return;
+        }
+      }
+    }
+  }, [data, token]);
 
   async function linkBank() {
     setLinkError(null);
@@ -117,8 +149,46 @@ export default function PortalOverviewPage({ params }: { params: { token: string
   const stageIndex = JOURNEY_STAGES.findIndex((s) => s.key === data.journeyStage);
   const scoreValues = data.scoreHistory.map((h) => h.score);
 
+  // Setup-progress checklist — every item reflects real state already
+  // fetched for this page (quiz status, CROA signature, a booked call, a
+  // goal on file, and — only when the org has Plaid configured — a linked
+  // bank account). Deliberately hidden once everything's done rather than
+  // sticking around as permanent clutter.
+  const checklist = [
+    { label: 'Complete your intake quiz', done: data.quiz?.status === 'completed' },
+    { label: 'Sign your agreement', done: data.croaSigned },
+    { label: 'Book your first call', done: !!data.upcomingCall },
+    { label: 'Set a goal', done: data.goals.length > 0 },
+    ...(plaidConfigured ? [{ label: 'Link a bank account', done: accounts.length > 0 }] : []),
+  ];
+  const checklistDone = checklist.filter((c) => c.done).length;
+
   return (
     <div className="space-y-6">
+      {celebration && (
+        <div className="relative overflow-hidden rounded-card bg-gradient-money p-6 text-white shadow-glow-money">
+          <button onClick={() => setCelebration(null)} aria-label="Dismiss" className="absolute right-4 top-4 text-white/60 hover:text-white">
+            <X size={16} strokeWidth={1.75} />
+          </button>
+          <div className="flex items-center gap-4">
+            <PartyPopper size={28} strokeWidth={1.5} />
+            <div>
+              {celebration.type === 'score' ? (
+                <>
+                  <p className="text-[17px] font-medium">Your score went up {celebration.delta} points!</p>
+                  <p className="mt-1 text-sm text-white/80">Now at {celebration.score}. Keep it up.</p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[17px] font-medium">Goal achieved: {celebration.title}</p>
+                  <p className="mt-1 text-sm text-white/80">Nice work — talk to your coach about what's next.</p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Hero — the one "elite" moment on the screen: dark surface, gradient
           score ring, real trend line (only renders with 2+ real data points). */}
       <div className="overflow-hidden rounded-card bg-gradient-dark p-8 text-white shadow-elevated">
@@ -139,6 +209,29 @@ export default function PortalOverviewPage({ params }: { params: { token: string
           {data.credit && <RadialScore score={data.credit.currentScore} target={data.credit.targetScore} dark size={148} />}
         </div>
       </div>
+
+      {checklistDone < checklist.length && (
+        <div className="rounded-card border border-line bg-white p-6 shadow-card">
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-sm font-medium text-ink">Get set up</p>
+            <span className="text-xs text-muted">{checklistDone} of {checklist.length} done</span>
+          </div>
+          <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-line">
+            <div className="h-full rounded-full bg-gradient-money transition-all duration-700" style={{ width: `${(checklistDone / checklist.length) * 100}%` }} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {checklist.map((item) => (
+              <span
+                key={item.label}
+                className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs ${item.done ? 'bg-money-tint text-money-hover' : 'bg-line text-muted'}`}
+              >
+                {item.done && <Check size={12} strokeWidth={2.5} />}
+                {item.label}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* "You are here" journey map */}
       <div className="rounded-card border border-line bg-white p-6 shadow-card">
@@ -235,12 +328,15 @@ export default function PortalOverviewPage({ params }: { params: { token: string
       {/* Bank linking */}
       {plaidConfigured && (
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-1 flex items-center justify-between">
             <p className="text-sm font-medium text-ink">Linked accounts</p>
             <button onClick={linkBank} disabled={linking} className="rounded-control border border-line px-4 py-2 text-sm text-ink hover:border-ink/30 disabled:opacity-50">
               {linking ? 'Connecting…' : 'Link a bank account'}
             </button>
           </div>
+          <p className="mb-4 flex items-center gap-1 text-xs text-muted">
+            <Lock size={11} strokeWidth={2} /> Bank-grade encryption via Plaid — we never see or store your login credentials.
+          </p>
           {linkError && <p className="mb-3 text-sm text-terra">{linkError}</p>}
           {accounts.length === 0 ? (
             <p className="text-sm text-muted">No accounts linked yet. Linking lets your coach see real spending trends alongside your budget.</p>

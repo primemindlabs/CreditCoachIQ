@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { Lock } from 'lucide-react';
 
 type GateState = 'checking' | 'invalid' | 'needs_mfa' | 'ready';
 
@@ -115,6 +116,9 @@ export default function PortalShell({ token, children }: { token: string; childr
               <button onClick={sendCode} disabled={sending} className="mt-3 w-full text-center text-xs text-muted hover:text-ink">
                 {sending ? 'Sending…' : 'Resend code'}
               </button>
+              <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-muted">
+                <Lock size={11} strokeWidth={2} /> Encrypted end to end — this code confirms it's really you
+              </p>
             </div>
           )}
         </div>
