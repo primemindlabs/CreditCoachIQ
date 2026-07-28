@@ -28,6 +28,23 @@ export async function GET(_req: Request, { params }: { params: { borrowerId: str
     referralPartnerName = (partner?.name as string) ?? null;
   }
 
+  // Real score history for the radial/sparkline on this page — one point
+  // per successfully-parsed report upload, oldest first.
+  let scoreHistory: { date: string; score: number }[] = [];
+  if (enrollment?.id) {
+    const { data: uploads } = await sb
+      .from('credit_report_uploads')
+      .select('report_date, created_at, score_exp')
+      .eq('enrollment_id', enrollment.id as string)
+      .eq('org_id', orgId)
+      .eq('parse_status', 'parsed')
+      .not('score_exp', 'is', null)
+      .order('created_at', { ascending: true });
+    scoreHistory = (uploads ?? [])
+      .filter((u) => u.score_exp != null)
+      .map((u) => ({ date: (u.report_date as string) ?? (u.created_at as string), score: u.score_exp as number }));
+  }
+
   return NextResponse.json({
     borrower,
     enrollment: enrollment ?? null,
@@ -35,5 +52,6 @@ export async function GET(_req: Request, { params }: { params: { borrowerId: str
     openTasks: tasks ?? [],
     recentCalls: recentCalls ?? [],
     referralPartnerName,
+    scoreHistory,
   });
 }

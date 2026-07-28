@@ -78,7 +78,7 @@ export default function PortalShell({ token, children }: { token: string; childr
   if (gate === 'invalid') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-paper px-6">
-        <div className="max-w-sm rounded-card border border-line bg-white p-8 text-center">
+        <div className="max-w-sm rounded-card border border-line bg-white p-8 text-center shadow-elevated">
           <p className="text-[17px] font-medium text-ink">This link isn&apos;t valid</p>
           <p className="mt-2 text-sm text-muted">It may have expired or been revoked. Contact your coach for a fresh link.</p>
         </div>
@@ -89,7 +89,8 @@ export default function PortalShell({ token, children }: { token: string; childr
   if (gate === 'needs_mfa') {
     return (
       <div className="flex min-h-screen items-center justify-center bg-paper px-6">
-        <div className="w-full max-w-sm rounded-card border border-line bg-white p-8">
+        <div className="w-full max-w-sm rounded-card border border-line bg-white p-8 shadow-elevated">
+          <div className="mb-5 h-9 w-9 rounded-full bg-gradient-money" />
           <p className="text-[17px] font-medium text-ink">Verify it&apos;s you</p>
           <p className="mt-2 text-sm text-muted">
             {otpSent ? 'We sent a 6-digit code to your email. Enter it below.' : 'Sending a verification code to your email…'}
@@ -124,15 +125,22 @@ export default function PortalShell({ token, children }: { token: string; childr
   const base = `/portal/${token}`;
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-line">
-        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-5">
-          <span className="text-[15px] font-medium text-ink">CreditCoachIQ</span>
-          <nav className="flex items-center gap-5 text-sm text-muted">
+      <header className="sticky top-0 z-10 border-b border-line bg-paper/80 backdrop-blur">
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <span className="inline-block h-7 w-7 rounded-full bg-gradient-money shadow-glow-money" />
+            <span className="text-[15px] font-medium text-ink">CreditCoachIQ</span>
+          </div>
+          <nav className="flex items-center gap-1 text-sm">
             {NAV.map((item) => {
               const href = `${base}${item.href}`;
               const active = pathname === href;
               return (
-                <Link key={item.href} href={href} className={active ? 'text-ink font-medium' : 'hover:text-ink'}>
+                <Link
+                  key={item.href}
+                  href={href}
+                  className={`rounded-full px-3 py-1.5 transition-colors ${active ? 'bg-ink text-white' : 'text-muted hover:bg-line/60 hover:text-ink'}`}
+                >
                   {item.label}
                 </Link>
               );

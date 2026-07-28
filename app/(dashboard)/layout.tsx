@@ -7,17 +7,20 @@ import { UserButton } from '@clerk/nextjs';
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-paper">
-      <header className="border-b border-line">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-8 py-5">
-          <Link href="/" className="text-[15px] font-medium text-ink">CreditCoachIQ</Link>
-          <nav className="flex items-center gap-6 text-sm text-muted">
-            <Link href="/caseload" className="hover:text-ink">Caseload</Link>
-            <Link href="/credit-reports" className="hover:text-ink">Credit Reports</Link>
-            <Link href="/referral-partners" className="hover:text-ink">Referrals</Link>
-            <Link href="/campaigns" className="hover:text-ink">Campaigns</Link>
-            <Link href="/templates" className="hover:text-ink">Templates</Link>
-            <Link href="/analytics" className="hover:text-ink">Analytics</Link>
-            <UserButton afterSignOutUrl="/" />
+      <header className="sticky top-0 z-10 border-b border-line bg-paper/80 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-8 py-4">
+          <Link href="/caseload" className="flex items-center gap-2.5">
+            <span className="inline-block h-7 w-7 rounded-full bg-gradient-money shadow-glow-money" />
+            <span className="text-[15px] font-medium text-ink">CreditCoachIQ</span>
+          </Link>
+          <nav className="flex items-center gap-1 text-sm text-muted">
+            <Link href="/caseload" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Caseload</Link>
+            <Link href="/credit-reports" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Credit Reports</Link>
+            <Link href="/referral-partners" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Referrals</Link>
+            <Link href="/campaigns" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Campaigns</Link>
+            <Link href="/templates" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Templates</Link>
+            <Link href="/analytics" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Analytics</Link>
+            <span className="ml-2"><UserButton afterSignOutUrl="/" /></span>
           </nav>
         </div>
       </header>
