@@ -1,8 +1,9 @@
+import { redirect } from 'next/navigation';
+
+// middleware.ts already runs auth.protect() on every non-public route,
+// including this one — so anyone reaching this component is guaranteed to
+// be signed in. This just sends them straight into the coach dashboard
+// instead of the placeholder page that used to live here.
 export default function HomePage() {
-  return (
-    <main style={{ padding: 40, fontFamily: 'system-ui, sans-serif' }}>
-      <h1>CreditCoachIQ</h1>
-      <p>Standalone credit-repair platform. Dashboard UI to be ported — see MIGRATION_NOTES.md.</p>
-    </main>
-  );
+  redirect('/caseload');
 }
