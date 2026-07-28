@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Users, TrendingUp, Clock } from 'lucide-react';
+import { Users, TrendingUp, Clock, AlertTriangle } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
 
 interface Client {
@@ -13,7 +13,14 @@ interface Client {
   journey_stage: string;
   journey_stage_updated_at: string;
   daysInStage: number;
+  risk: { score: number; level: 'low' | 'medium' | 'high'; reasons: string[] };
 }
+
+const RISK_STYLE: Record<string, string> = {
+  high: 'bg-terra-tint text-terra',
+  medium: 'bg-gold-tint text-ink',
+  low: 'bg-line text-muted',
+};
 
 const STAGE_LABELS: Record<string, string> = {
   credit_coaching: 'Credit coaching',
@@ -59,7 +66,8 @@ export default function CaseloadPage() {
     const total = clients.length;
     const advancing = clients.filter((c) => c.journey_stage === 'credit_stacking' || c.journey_stage === 'loan_ready').length;
     const avgDays = total > 0 ? Math.round(clients.reduce((s, c) => s + c.daysInStage, 0) / total) : 0;
-    return { total, advancing, avgDays };
+    const atRisk = clients.filter((c) => c.risk?.level === 'high').length;
+    return { total, advancing, avgDays, atRisk };
   }, [clients]);
 
   const filtered = useMemo(() => {
@@ -82,10 +90,11 @@ export default function CaseloadPage() {
       </div>
 
       {!loading && clients.length > 0 && (
-        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-4">
           <StatCard label="Total clients" value={stats.total} accent="money" icon={<Users size={16} strokeWidth={1.75} />} />
           <StatCard label="Stacking or loan-ready" value={stats.advancing} accent="iris" icon={<TrendingUp size={16} strokeWidth={1.75} />} />
           <StatCard label="Avg. days in stage" value={stats.avgDays} icon={<Clock size={16} strokeWidth={1.75} />} />
+          <StatCard label="At risk" value={stats.atRisk} accent={stats.atRisk > 0 ? 'gold' : undefined} icon={<AlertTriangle size={16} strokeWidth={1.75} />} />
         </div>
       )}
 
@@ -113,6 +122,7 @@ export default function CaseloadPage() {
                 <th className="px-6 py-3 font-normal">Plan</th>
                 <th className="px-6 py-3 font-normal">Stage</th>
                 <th className="px-6 py-3 font-normal">Days in stage</th>
+                <th className="px-6 py-3 font-normal">Risk</th>
               </tr>
             </thead>
             <tbody>
@@ -131,6 +141,15 @@ export default function CaseloadPage() {
                     <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STAGE_STYLE[c.journey_stage] ?? 'bg-line text-muted'}`}>{STAGE_LABELS[c.journey_stage] ?? c.journey_stage}</span>
                   </td>
                   <td className="px-6 py-4 text-muted">{c.daysInStage}</td>
+                  <td className="px-6 py-4">
+                    {c.risk?.level && c.risk.level !== 'low' ? (
+                      <span title={c.risk.reasons.join(', ')} className={`rounded-full px-2.5 py-1 text-xs font-medium ${RISK_STYLE[c.risk.level]}`}>
+                        {c.risk.level}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted">—</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

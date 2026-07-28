@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Phone, RefreshCw, ShieldOff } from 'lucide-react';
+import { Phone, RefreshCw, ShieldOff, Sparkles } from 'lucide-react';
 import RadialScore from '@/components/ui/RadialScore';
 import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
@@ -49,6 +49,8 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   const [callStatus, setCallStatus] = useState<string | null>(null);
   const [stageBusy, setStageBusy] = useState(false);
   const [portalMsg, setPortalMsg] = useState<string | null>(null);
+  const [callBrief, setCallBrief] = useState<string | null>(null);
+  const [callBriefLoading, setCallBriefLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,6 +68,14 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   }, [borrowerId]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function loadCallBrief() {
+    setCallBriefLoading(true);
+    const res = await fetch(`/api/coach/client/${borrowerId}/call-brief`);
+    const d = await res.json();
+    setCallBrief(res.ok ? d.brief : (d.error ?? 'Could not generate a brief.'));
+    setCallBriefLoading(false);
+  }
 
   async function placeCall() {
     setCallStatus('Calling…');
@@ -154,7 +164,13 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
               <button onClick={() => portalAction('revoke')} className="flex items-center gap-1.5 rounded-control border border-white/20 px-4 py-2.5 text-sm text-white hover:bg-white/10">
                 <ShieldOff size={14} strokeWidth={1.75} /> Revoke portal
               </button>
+              <button onClick={loadCallBrief} disabled={callBriefLoading} className="flex items-center gap-1.5 rounded-control bg-gradient-iris px-4 py-2.5 text-sm font-medium text-white shadow-glow-iris disabled:opacity-60">
+                <Sparkles size={14} strokeWidth={1.75} /> {callBriefLoading ? 'Writing…' : 'Call prep brief'}
+              </button>
             </div>
+            {callBrief && (
+              <div className="mt-4 max-w-xl rounded-control bg-white/10 p-4 text-sm text-white/90">{callBrief}</div>
+            )}
             {callStatus && <p className="mt-3 text-sm text-white/60">{callStatus}</p>}
             {portalMsg && <p className="mt-3 break-all text-sm text-white/60">{portalMsg}</p>}
           </div>

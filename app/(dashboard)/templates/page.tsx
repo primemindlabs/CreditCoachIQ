@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Sparkles } from 'lucide-react';
 
 interface Template { id: string; name: string; channel: 'email' | 'sms'; subject: string | null; body: string }
 
@@ -13,6 +14,8 @@ export default function TemplatesPage() {
   const [channel, setChannel] = useState<'email' | 'sms'>('email');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [draftPurpose, setDraftPurpose] = useState('');
+  const [drafting, setDrafting] = useState(false);
 
   async function load() {
     const res = await fetch('/api/templates');
@@ -34,6 +37,21 @@ export default function TemplatesPage() {
 
   function insertToken(token: string) {
     setBody((b) => `${b}{{${token}}}`);
+  }
+
+  async function draftWithAI() {
+    if (!draftPurpose.trim() || drafting) return;
+    setDrafting(true);
+    const res = await fetch('/api/templates/draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ purpose: draftPurpose.trim(), channel }),
+    });
+    const d = await res.json();
+    setDrafting(false);
+    if (!res.ok) return;
+    if (d.subject) setSubject(d.subject);
+    setBody(d.body);
   }
 
   return (
@@ -67,6 +85,21 @@ export default function TemplatesPage() {
               <input value={subject} onChange={(e) => setSubject(e.target.value)} className="w-full rounded-control border border-line px-3 py-2 text-sm" placeholder="{{first_name}}, a quick update" />
             </div>
           )}
+          <div className="mb-4 rounded-control bg-iris-tint p-3">
+            <label className="mb-1 flex items-center gap-1.5 text-xs font-medium text-ink"><Sparkles size={12} strokeWidth={1.75} /> Draft with AI</label>
+            <div className="mt-2 flex gap-2">
+              <input
+                value={draftPurpose}
+                onChange={(e) => setDraftPurpose(e.target.value)}
+                placeholder="e.g. congratulate a client on a 20-point score jump"
+                className="flex-1 rounded-control border border-line bg-white px-3 py-2 text-sm"
+              />
+              <button onClick={draftWithAI} disabled={drafting || !draftPurpose.trim()} className="shrink-0 rounded-control bg-iris px-4 py-2 text-sm font-medium text-white disabled:opacity-50">
+                {drafting ? 'Drafting…' : 'Draft'}
+              </button>
+            </div>
+            <p className="mt-1.5 text-[11px] text-muted">Fills in the subject/body below — review and edit before saving.</p>
+          </div>
           <div className="mb-3">
             <label className="mb-1 block text-xs text-muted">Body</label>
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6} className="w-full rounded-control border border-line px-3 py-2 text-sm" placeholder={`Hi {{first_name}}, your score is now {{current_score}}...`} />

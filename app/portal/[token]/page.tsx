@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Landmark, Phone, MessageCircle, Check, Lock, PartyPopper, X } from 'lucide-react';
+import { Landmark, Phone, MessageCircle, Check, Lock, PartyPopper, X, Sparkles, Send } from 'lucide-react';
 import RadialScore from '@/components/ui/RadialScore';
 import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
@@ -48,6 +48,12 @@ export default function PortalOverviewPage({ params }: { params: { token: string
   const [linking, setLinking] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
   const [celebration, setCelebration] = useState<{ type: 'score'; delta: number; score: number } | { type: 'goal'; title: string } | null>(null);
+  const [scoreExplanation, setScoreExplanation] = useState<string | null>(null);
+  const [spendingDigest, setSpendingDigest] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -79,6 +85,10 @@ export default function PortalOverviewPage({ params }: { params: { token: string
       if (latest > previous && latest > lastCelebrated) {
         setCelebration({ type: 'score', delta: latest - previous, score: latest });
         window.localStorage.setItem(key, String(latest));
+        fetch(`/api/portal/${token}/score-explanation?from=${previous}&to=${latest}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => setScoreExplanation(d?.explanation ?? null))
+          .catch(() => undefined);
         return;
       }
     }
@@ -93,6 +103,33 @@ export default function PortalOverviewPage({ params }: { params: { token: string
       }
     }
   }, [data, token]);
+
+  // Fetch the spending digest once there's something to summarize — no
+  // point calling Haiku over zero transactions.
+  useEffect(() => {
+    if (accounts.length === 0 || spendingDigest) return;
+    fetch(`/api/portal/${token}/spending-digest`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setSpendingDigest(d?.digest ?? null))
+      .catch(() => undefined);
+  }, [accounts.length, spendingDigest, token]);
+
+  async function sendChatMessage() {
+    const question = chatInput.trim();
+    if (!question || chatLoading) return;
+    const nextMessages = [...chatMessages, { role: 'user' as const, content: question }];
+    setChatMessages(nextMessages);
+    setChatInput('');
+    setChatLoading(true);
+    const res = await fetch(`/api/portal/${token}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, history: chatMessages }),
+    });
+    const d = await res.json();
+    setChatLoading(false);
+    setChatMessages([...nextMessages, { role: 'assistant', content: res.ok ? d.answer : (d.error ?? 'Something went wrong.') }]);
+  }
 
   async function linkBank() {
     setLinkError(null);
@@ -176,7 +213,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
               {celebration.type === 'score' ? (
                 <>
                   <p className="text-[17px] font-medium">Your score went up {celebration.delta} points!</p>
-                  <p className="mt-1 text-sm text-white/80">Now at {celebration.score}. Keep it up.</p>
+                  <p className="mt-1 text-sm text-white/80">{scoreExplanation ?? `Now at ${celebration.score}. Keep it up.`}</p>
                 </>
               ) : (
                 <>
@@ -342,6 +379,9 @@ export default function PortalOverviewPage({ params }: { params: { token: string
             <p className="text-sm text-muted">No accounts linked yet. Linking lets your coach see real spending trends alongside your budget.</p>
           ) : (
             <>
+              {spendingDigest && (
+                <div className="mb-4 rounded-control bg-iris-tint p-4 text-sm text-ink">{spendingDigest}</div>
+              )}
               <div className="mb-4 space-y-2">
                 {accounts.map((a) => (
                   <div key={a.id} className="flex items-center justify-between text-sm">
@@ -367,6 +407,50 @@ export default function PortalOverviewPage({ params }: { params: { token: string
           )}
         </div>
       )}
+
+      {/* Grounded assistant — answers only from this client's own data (see
+          app/api/portal/[token]/chat/route.ts). Fixed widget so it's
+          reachable from anywhere on the overview without a page nav. */}
+      <div className="fixed bottom-6 right-6 z-20">
+        {chatOpen ? (
+          <div className="flex h-[420px] w-[340px] flex-col overflow-hidden rounded-card border border-line bg-white shadow-elevated">
+            <div className="flex items-center justify-between border-b border-line bg-gradient-iris px-4 py-3 text-white">
+              <span className="flex items-center gap-1.5 text-sm font-medium"><Sparkles size={14} strokeWidth={1.75} /> Ask about your credit</span>
+              <button onClick={() => setChatOpen(false)} aria-label="Close"><X size={16} strokeWidth={1.75} /></button>
+            </div>
+            <div className="flex-1 space-y-3 overflow-y-auto p-4">
+              {chatMessages.length === 0 && (
+                <p className="text-xs text-muted">Ask things like &ldquo;what does this negative remark mean&rdquo; or &ldquo;why can&apos;t I dispute this yet&rdquo; — answered from your own account data.</p>
+              )}
+              {chatMessages.map((m, i) => (
+                <div key={i} className={`rounded-control px-3 py-2 text-sm ${m.role === 'user' ? 'ml-6 bg-iris-tint text-ink' : 'mr-6 bg-paper text-ink'}`}>
+                  {m.content}
+                </div>
+              ))}
+              {chatLoading && <div className="mr-6 rounded-control bg-paper px-3 py-2 text-sm text-muted">Thinking…</div>}
+            </div>
+            <div className="flex items-center gap-2 border-t border-line p-3">
+              <input
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && sendChatMessage()}
+                placeholder="Ask a question…"
+                className="flex-1 rounded-control border border-line px-3 py-2 text-sm focus:border-ink/30 focus:outline-none"
+              />
+              <button onClick={sendChatMessage} disabled={chatLoading} className="rounded-control bg-iris px-3 py-2 text-white disabled:opacity-50">
+                <Send size={14} strokeWidth={1.75} />
+              </button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setChatOpen(true)}
+            className="flex items-center gap-2 rounded-full bg-gradient-iris px-5 py-3 text-sm font-medium text-white shadow-glow-iris"
+          >
+            <Sparkles size={16} strokeWidth={1.75} /> Ask a question
+          </button>
+        )}
+      </div>
     </div>
   );
 }

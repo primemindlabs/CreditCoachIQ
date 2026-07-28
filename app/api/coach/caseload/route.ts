@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { computeChurnRisk } from '@/lib/analytics/churnRisk';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,11 +26,33 @@ export async function GET(req: Request) {
   const { data: borrowers, error } = await query.order('journey_stage_updated_at', { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const borrowerIds = (borrowers ?? []).map((b) => b.id as string);
+  const [{ data: enrollments }, { data: openComplaints }] = borrowerIds.length
+    ? await Promise.all([
+        sb.from('credit_repair_enrollments').select('borrower_id, payment_retry_count').eq('org_id', orgId).in('borrower_id', borrowerIds),
+        sb.from('complaint_log').select('borrower_id').eq('org_id', orgId).in('borrower_id', borrowerIds).in('status', ['open', 'investigating']),
+      ])
+    : [{ data: [] }, { data: [] }];
+
+  const retryByBorrower = new Map<string, number>();
+  for (const e of enrollments ?? []) retryByBorrower.set(e.borrower_id as string, (e.payment_retry_count as number) ?? 0);
+  const complaintCountByBorrower = new Map<string, number>();
+  for (const c of openComplaints ?? []) {
+    const key = c.borrower_id as string;
+    complaintCountByBorrower.set(key, (complaintCountByBorrower.get(key) ?? 0) + 1);
+  }
+
   const now = Date.now();
-  const withDays = (borrowers ?? []).map((b) => ({
-    ...b,
-    daysInStage: Math.floor((now - new Date(b.journey_stage_updated_at as string).getTime()) / (1000 * 60 * 60 * 24)),
-  }));
+  const withDays = (borrowers ?? []).map((b) => {
+    const daysInStage = Math.floor((now - new Date(b.journey_stage_updated_at as string).getTime()) / (1000 * 60 * 60 * 24));
+    const risk = computeChurnRisk({
+      daysInStage,
+      paymentRetryCount: retryByBorrower.get(b.id as string) ?? 0,
+      openComplaintCount: complaintCountByBorrower.get(b.id as string) ?? 0,
+      journeyStage: b.journey_stage as string,
+    });
+    return { ...b, daysInStage, risk };
+  });
 
   return NextResponse.json({ clients: withDays });
 }

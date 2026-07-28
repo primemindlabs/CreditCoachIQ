@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard } from 'lucide-react';
+import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, Sparkles } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
 
 interface BorrowerRef { first_name: string; last_name: string }
@@ -18,6 +18,7 @@ interface Today {
   unreadMessages: MessageItem[];
   openComplaints: ComplaintItem[];
   paymentFailures: PaymentItem[];
+  scoreJumps: { borrowerId: string; delta: number; name: string }[];
 }
 
 function name(b: BorrowerRef | null): string {
@@ -27,12 +28,23 @@ function name(b: BorrowerRef | null): string {
 export default function TodayPage() {
   const [data, setData] = useState<Today | null>(null);
   const [loading, setLoading] = useState(true);
+  const [briefing, setBriefing] = useState<string | null>(null);
+  const [briefingLoading, setBriefingLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     const d = await fetch('/api/coach/today').then((r) => r.json());
     setData(d);
     setLoading(false);
+    setBriefingLoading(true);
+    fetch('/api/coach/today/briefing', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(d),
+    })
+      .then((r) => r.json())
+      .then((b) => setBriefing(b.briefing))
+      .finally(() => setBriefingLoading(false));
   }, []);
 
   useEffect(() => { load(); }, [load]);
@@ -66,7 +78,10 @@ export default function TodayPage() {
         <h1 className="mt-1 text-[32px] font-medium leading-tight">
           {needsAttention === 0 ? "You're all caught up" : `${needsAttention} thing${needsAttention === 1 ? '' : 's'} need your attention`}
         </h1>
-        <p className="mt-2 text-sm text-white/60">Everything below is pulled live — nothing here is a static reminder you set yourself.</p>
+        <p className="mt-3 flex items-start gap-2 text-sm text-white/70">
+          <Sparkles size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" />
+          <span>{briefingLoading ? 'Writing your briefing…' : (briefing ?? 'Everything below is pulled live.')}</span>
+        </p>
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
