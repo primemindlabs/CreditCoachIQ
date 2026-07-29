@@ -4,10 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { scoreQuizResponse, type QuizAnswerInput, type QuizQuestion } from '@/lib/quiz/score';
 import { generateQuizSummary } from '@/lib/quiz/summarize';
 import type { PlanTier } from '@/lib/plans';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/quiz'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -30,9 +31,9 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   }
 
   return NextResponse.json({ questions: questions ?? [], response: response ?? null, existingAnswers });
-}
+});
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/quiz'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -108,4 +109,4 @@ export async function POST(req: Request, { params }: { params: { token: string }
   });
 
   return NextResponse.json({ ok: true, recommendedTier: scored.recommendedTier as PlanTier });
-}
+});

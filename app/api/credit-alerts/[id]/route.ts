@@ -10,13 +10,14 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateReengagementDraft } from '@/lib/creditAlerts/rateReengagement';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const ACTIONS = ['sent_rate_update', 'called_borrower', 'dismissed'];
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export const GET = withErrorHandling(async function GET(_req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 });
@@ -29,9 +30,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   const draft = await generateReengagementDraft({ alertType: alert.alert_type, scoreDelta: alert.score_delta ?? 0, firstName: borrower?.first_name ?? 'there', loanSummary: null });
   return NextResponse.json({ draft });
-}
+});
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 });
@@ -41,4 +42,4 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const { data: profile } = await sb.from('profiles').select('id').eq('clerk_user_id', userId).maybeSingle();
   await sb.from('credit_alerts').update({ action_taken: b.action_taken, actioned_at: new Date().toISOString(), actioned_by: profile?.id ?? null }).eq('id', params.id).eq('org_id', orgId);
   return NextResponse.json({ ok: true });
-}
+});

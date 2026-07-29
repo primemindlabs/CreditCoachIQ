@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * rather than a separate duplicated audit table — those columns are already
  * the source of truth, this just surfaces them together for review.
  */
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
@@ -47,4 +48,4 @@ export async function GET(req: Request) {
   ].sort((a, b) => new Date(b.at as string).getTime() - new Date(a.at as string).getTime());
 
   return NextResponse.json({ events: events.slice(0, limit) });
-}
+});

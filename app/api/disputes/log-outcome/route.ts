@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import Anthropic from '@anthropic-ai/sdk';
 import { createDisputeForTradeline, type LetterType } from '@/lib/disputes/letters';
 import { fireTrigger } from '@/lib/messaging/triggers';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -16,7 +17,7 @@ export const runtime = 'nodejs';
  * from conduit-next's log-outcome route, adapted to fire the campaign
  * engine's 'dispute_response_received' trigger instead of notifyLO.
  */
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -90,4 +91,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ nextAction, nextDisputeId });
-}
+});

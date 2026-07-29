@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { generateTodayBriefing } from '@/lib/ai/todayBriefing';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ interface BorrowerRef { first_name: string; last_name: string }
 // /api/coach/today — no duplicate queries, this is purely the narrative
 // layer on top of data the client already has and the user has already
 // seen rendered as raw lists.
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -35,4 +36,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ briefing });
-}
+});

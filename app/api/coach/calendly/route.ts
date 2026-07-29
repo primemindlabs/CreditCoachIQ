@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // A coach's own Calendly scheduling link — what the client portal's booking
 // route serves up. v1 is deliberately simple: a public scheduling-page URL,
 // not a full OAuth integration (no Calendly API token required to get this working).
-export async function GET() {
+export const GET = withErrorHandling(async function GET() {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
@@ -17,9 +18,9 @@ export async function GET() {
   const { data, error } = await sb.from('coach_calendly_links').select('*').eq('org_id', orgId).eq('profile_id', profile.id).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ link: data ?? null });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { scheduling_url?: string; calendly_event_type_uri?: string };
@@ -35,4 +36,4 @@ export async function POST(req: Request) {
   }, { onConflict: 'org_id,profile_id' }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ link: data });
-}
+});

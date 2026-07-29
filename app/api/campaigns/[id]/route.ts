@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Single-campaign fetch (with its ordered steps + template info) — what the builder page loads.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export const GET = withErrorHandling(async function GET(_req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
@@ -22,13 +23,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     .order('step_order');
 
   return NextResponse.json({ campaign, steps: steps ?? [] });
-}
+});
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export const DELETE = withErrorHandling(async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
   const { error } = await sb.from('campaigns').update({ status: 'archived' }).eq('id', params.id).eq('org_id', orgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
-}
+});

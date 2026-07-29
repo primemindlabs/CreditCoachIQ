@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { verifyPortalToken, requestMeta } from '@/lib/portal/token';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/messages'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -21,9 +22,9 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   await sb.from('portal_messages').update({ read_at: new Date().toISOString() }).eq('org_id', ctx.orgId).eq('borrower_id', ctx.borrowerId).eq('sender', 'coach').is('read_at', null);
 
   return NextResponse.json({ messages: messages ?? [] });
-}
+});
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/messages'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -44,4 +45,4 @@ export async function POST(req: Request, { params }: { params: { token: string }
   });
 
   return NextResponse.json({ message: data });
-}
+});

@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { initiateClickToCall } from '@/lib/dialer';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -23,12 +24,12 @@ export async function GET(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ calls: calls ?? [] });
-}
+});
 
 // Post-call follow-up notes — the call itself is logged automatically via
 // the Twilio status webhook (app/api/telephony/status); notes are the one
 // piece a coach has to add by hand.
-export async function PATCH(req: Request) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -40,9 +41,9 @@ export async function PATCH(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { orgId, userId } = await getOrgContext();
   if (!orgId || !userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -80,4 +81,4 @@ export async function POST(req: Request) {
   if (logError) return NextResponse.json({ error: logError.message }, { status: 500 });
 
   return NextResponse.json({ ok: true, callSid: result.callSid, logId: logRow.id });
-}
+});

@@ -1,22 +1,23 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Coach-editable question bank behind the intake quiz. Seeded with a
 // default set per org in the migration; this lets a coach tune wording and
 // path_weight scoring without a deploy.
-export async function GET() {
+export const GET = withErrorHandling(async function GET() {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
   const { data, error } = await sb.from('intake_quiz_questions').select('*').eq('org_id', orgId).order('question_order');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ questions: data ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
@@ -36,9 +37,9 @@ export async function POST(req: Request) {
   }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ question: data });
-}
+});
 
-export async function PATCH(req: Request) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { id?: string; prompt?: string; options?: unknown; helper_text?: string; is_active?: boolean; is_required?: boolean };
@@ -53,4 +54,4 @@ export async function PATCH(req: Request) {
   const { error } = await sb.from('intake_quiz_questions').update(patch).eq('id', b.id).eq('org_id', orgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
-}
+});

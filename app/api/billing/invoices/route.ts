@@ -3,13 +3,14 @@ import { getOrgContext } from '@/lib/auth/orgContext';
 import { hasPermission } from '@/lib/auth/permissions';
 import { createAdminClient } from '@/lib/supabase/admin';
 import getStripe from '@/lib/stripe';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Coach-facing invoice history — pulled live from Stripe rather than a local
 // mirror table, same reasoning as lib/analytics.ts's revenue numbers: Stripe
 // is the source of truth and a local copy could drift.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!hasPermission(role, 'view_billing')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -63,4 +64,4 @@ export async function GET(req: Request) {
     paymentRetryCount: enrollment.payment_retry_count,
     invoices,
   });
-}
+});

@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Aggregate capital-available rollup + promo-APR-expiration alerts for a
 // borrower's credit stack — this is the number that matters to the coach
 // and, eventually, to the loan-ready checklist.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -33,4 +34,4 @@ export async function GET(req: Request) {
     activeApplicationCount: active.length,
     expiringWithin30Days,
   });
-}
+});

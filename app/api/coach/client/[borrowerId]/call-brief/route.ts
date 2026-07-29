@@ -3,10 +3,11 @@ import { getOrgContext } from '@/lib/auth/orgContext';
 import { hasPermission } from '@/lib/auth/permissions';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { generateCallPrepBrief } from '@/lib/ai/callPrepBrief';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, { params }: { params: { borrowerId: string } }) {
+export const GET = withErrorHandling(async function GET(_req: Request, { params }: { params: { borrowerId: string } }) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!hasPermission(role, 'manage_disputes')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -55,4 +56,4 @@ export async function GET(_req: Request, { params }: { params: { borrowerId: str
   });
 
   return NextResponse.json({ brief });
-}
+});

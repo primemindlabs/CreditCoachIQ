@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Records a commission event — accrued, paid, or a manual adjustment.
 // Append-only by design (see migration 0011): this only inserts, it never
 // edits or removes a prior event. A correction is a new offsetting event.
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (role !== 'admin') return NextResponse.json({ error: 'Admin only' }, { status: 403 });
@@ -42,4 +43,4 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ event: data });
-}
+});

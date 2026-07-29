@@ -1,21 +1,22 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Admin management of which states EquityNest Capital is registered/bonded
 // in — gates app/api/enroll's CROA state-registration check.
-export async function GET() {
+export const GET = withErrorHandling(async function GET() {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
   const { data, error } = await sb.from('state_compliance_status').select('*').eq('org_id', orgId).order('state');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ states: data ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (role !== 'admin') return NextResponse.json({ error: 'Admin access required' }, { status: 403 });
@@ -32,4 +33,4 @@ export async function POST(req: Request) {
   }, { onConflict: 'org_id,state' }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ state: data });
-}
+});

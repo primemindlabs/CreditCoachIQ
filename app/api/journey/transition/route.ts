@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { transitionStage, type JourneyStage } from '@/lib/journey';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ const STAGES: JourneyStage[] = ['credit_coaching', 'credit_stacking', 'loan_read
 // Move a client to a new journey stage. `loan_ready` requires the acting
 // coach's profile id and a complete required-checklist (enforced in
 // lib/journey.ts) — this endpoint never lets the transition happen silently.
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -32,4 +33,4 @@ export async function POST(req: Request) {
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
   return NextResponse.json({ ok: true });
-}
+});

@@ -3,6 +3,7 @@ import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import getStripe from '@/lib/stripe';
 import { fireTrigger } from '@/lib/messaging/triggers';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,7 +17,7 @@ export const dynamic = 'force-dynamic';
  * directly. We upsert a local `borrowers` row keyed on
  * (org_id, externalSource, externalLeadId) so repeat calls are idempotent.
  */
-export async function POST(req: NextRequest): Promise<NextResponse> {
+export const POST = withErrorHandling(async function POST(req: NextRequest): Promise<NextResponse> {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -145,4 +146,4 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   void fireTrigger(orgId, 'client_enrolled', { borrowerId: borrower.id as string });
 
   return NextResponse.json({ enrollmentId: enrollment.id, borrowerId: borrower.id });
-}
+});

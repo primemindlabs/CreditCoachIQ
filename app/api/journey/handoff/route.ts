@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { assertTierIncludes, PlanGateError } from '@/lib/plans';
 import { sendHandoffPackage, type HandoffPayload } from '@/lib/integrations/conduit-client';
 import { transitionStage } from '@/lib/journey';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ export const dynamic = 'force-dynamic';
  * route does not itself verify the checklist; use /api/journey/transition to
  * get there first, which does enforce it.
  */
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -77,4 +78,4 @@ export async function POST(req: Request) {
 
   await sb.from('handoff_packages').update({ status: 'failed', error_message: result.error ?? 'Unknown error' }).eq('id', pkg.id);
   return NextResponse.json({ ok: false, error: result.error }, { status: 502 });
-}
+});

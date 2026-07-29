@@ -48,15 +48,17 @@ export default function LeadsPage() {
     setError(null);
     try {
       const res = await fetch('/api/leads');
-      const d = await res.json();
       if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
         setError(d.error ?? `Could not load leads (${res.status}).`);
         setLeads([]);
-      } else {
-        setLeads(d.leads ?? []);
+        setLoading(false);
+        return;
       }
+      const d = await res.json();
+      setLeads(d.leads ?? []);
     } catch {
-      setError('Could not reach the server.');
+      setError('Could not reach the server. Check your connection and try again.');
       setLeads([]);
     }
     setLoading(false);
@@ -81,8 +83,8 @@ export default function LeadsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, interestLevel: form.interestLevel || undefined }),
       });
-      const d = await res.json();
       if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
         setError(d.error ?? `Could not save this lead (${res.status}).`);
         setSubmitting(false);
         return; // leave the form open and filled in so nothing is lost
@@ -105,8 +107,8 @@ export default function LeadsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       });
-      const d = await res.json();
       if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
         setError(d.error ?? `Could not update this lead (${res.status}).`);
         return;
       }

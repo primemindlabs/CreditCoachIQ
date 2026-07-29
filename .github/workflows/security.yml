@@ -1,0 +1,65 @@
+name: security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly sweep even if nobody pushes — catches newly-disclosed CVEs in
+    # dependencies that were fine last week.
+    - cron: '0 13 * * 1'
+
+jobs:
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependency-audit:
+    name: Dependency vulnerability audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # audit-level=critical, not high: as of 2026-07-29 there's a known,
+      # accepted-for-now set of ~21 "high" advisories that only resolve by
+      # jumping Next.js 14 -> 16 (skips 15 entirely) — a deliberate, tested
+      # migration project, not something CI should force on every push.
+      # Track that upgrade separately; until then this still catches new
+      # critical findings and surfaces high ones in the log without blocking.
+      - name: npm audit (critical severity — fails the build)
+        run: npm audit --audit-level=critical
+      - name: npm audit (high severity — informational only, see comment above)
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+  typecheck-and-build:
+    name: Typecheck + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          # Dummy values so the build step doesn't fail on missing env at
+          # build time — this job only proves the code compiles, it never
+          # deploys or talks to real services.
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          SUPABASE_SERVICE_ROLE_KEY: placeholder
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_placeholder
+          CLERK_SECRET_KEY: sk_test_placeholder

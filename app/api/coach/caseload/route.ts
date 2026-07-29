@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { computeChurnRisk } from '@/lib/analytics/churnRisk';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Every client assigned to the current coach (or, for admins, the whole
 // org), with current stage, days-in-stage, and open-task count — the main
 // coach dashboard view.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -56,4 +57,4 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({ clients: withDays });
-}
+});

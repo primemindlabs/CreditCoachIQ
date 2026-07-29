@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { verifyPortalToken, requestMeta } from '@/lib/portal/token';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createLinkToken, isPlaidConfigured } from '@/lib/plaid';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/plaid/link-token'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -20,4 +21,4 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   if (!result.ok) return NextResponse.json({ configured: true, error: result.error }, { status: 400 });
 
   return NextResponse.json({ configured: true, linkToken: result.linkToken });
-}
+});

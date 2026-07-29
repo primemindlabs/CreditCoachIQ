@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,16 +9,16 @@ export const dynamic = 'force-dynamic';
 // step_order is 1-indexed and must be contiguous; reordering is a full
 // replace (send the whole new order) rather than per-step move operations,
 // which keeps the builder's drag-and-drop reorder simple to implement against.
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export const GET = withErrorHandling(async function GET(_req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
   const { data, error } = await sb.from('campaign_steps').select('*, message_templates(name, channel, subject)').eq('campaign_id', params.id).eq('org_id', orgId).order('step_order');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ steps: data ?? [] });
-}
+});
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
@@ -35,14 +36,14 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ step: data });
-}
+});
 
 // PUT — replace the full step sequence in one call (drag-and-drop reorder,
 // or bulk edit from the builder UI). Deletes and re-inserts rather than
 // diffing, since campaign_sends references step_id historically, not the
 // live sequence — past sends keep their original step_id even after a
 // reorder recreates the row.
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
+export const PUT = withErrorHandling(async function PUT(req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as {
@@ -62,4 +63,4 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json({ ok: true });
-}
+});

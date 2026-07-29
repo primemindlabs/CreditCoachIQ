@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Coach side of the two-way portal thread — mirrors app/api/portal/[token]/messages.
-export async function GET(_req: Request, { params }: { params: { borrowerId: string } }) {
+export const GET = withErrorHandling(async function GET(_req: Request, { params }: { params: { borrowerId: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
@@ -15,9 +16,9 @@ export async function GET(_req: Request, { params }: { params: { borrowerId: str
   await sb.from('portal_messages').update({ read_at: new Date().toISOString() }).eq('org_id', orgId).eq('borrower_id', params.borrowerId).eq('sender', 'borrower').is('read_at', null);
 
   return NextResponse.json({ messages: data ?? [] });
-}
+});
 
-export async function POST(req: Request, { params }: { params: { borrowerId: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { borrowerId: string } }) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { body?: string };
@@ -30,4 +31,4 @@ export async function POST(req: Request, { params }: { params: { borrowerId: str
   }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ message: data });
-}
+});

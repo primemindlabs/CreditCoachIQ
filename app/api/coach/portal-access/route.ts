@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { issuePortalToken, revokePortalToken, portalUrl } from '@/lib/portal/token';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Coach control over a client's portal access: view recent access history,
 // revoke immediately (suspected compromise, client offboarded), or reissue
 // a fresh link (also implicitly revokes the old one — see issuePortalToken).
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const borrowerId = new URL(req.url).searchParams.get('borrower_id');
@@ -21,9 +22,9 @@ export async function GET(req: Request) {
   ]);
 
   return NextResponse.json({ token: token ?? null, accessLog: log ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = (await req.json().catch(() => ({}))) as { borrowerId?: string; action?: 'revoke' | 'reissue' };
@@ -41,4 +42,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 });
-}
+});

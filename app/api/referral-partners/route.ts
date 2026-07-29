@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import crypto from 'crypto';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +14,7 @@ function generateReferralCode(name: string): string {
 
 // List partners with a rollup of attributed clients + commission totals —
 // the summary an owner would actually want, not just the raw partner rows.
-export async function GET() {
+export const GET = withErrorHandling(async function GET() {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -49,9 +50,9 @@ export async function GET() {
   }));
 
   return NextResponse.json({ partners: withStats });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -88,4 +89,4 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ partner: data });
-}
+});

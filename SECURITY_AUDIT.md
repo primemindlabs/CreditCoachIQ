@@ -40,3 +40,37 @@ These are real gaps, but each involves a choice (cost, vendor, or UX tradeoff) w
 ## Competitive note
 
 DisputeFox advertises 2FA as a headline security feature. Whatever CreditCoachIQ ships should at minimum match that bar for anything touching the portal — that's the strongest argument for prioritizing the step-up-auth decision above.
+
+---
+
+## Addendum — "hacker/leak-proof" hardening pass (2026-07-28)
+
+Most of what this audit flagged as "still open" back in the original pass has since shipped: portal step-up MFA (`lib/portal/otp.ts` — 6-digit email OTP, 5-attempt lockout, 10-min TTL), `governance/WISP.md`, vendor risk review, retention policy, and incident response plan. This pass re-checked the whole system end to end against a "could a motivated attacker or a leak actually hurt us" standard, not just "did we check the GLBA boxes."
+
+**What was already solid (verified, not just assumed):**
+- No SSN stored anywhere in the schema.
+- EIN and Plaid access tokens are AES-256-GCM encrypted at rest (`lib/crypto/encrypt.ts`), masked to last-4 on display.
+- Portal magic-link tokens are SHA-256 hashed at rest — a DB leak doesn't hand out live sessions.
+- Every portal access attempt (success, failure, expired, revoked) is logged with IP + user-agent.
+- OTP codes are hashed, rate-limited to 5 attempts per challenge, and expire in 10 minutes.
+- Security headers (HSTS, CSP, X-Frame-Options, nosniff, Permissions-Policy) are already in `next.config.mjs`.
+- Stripe, Calendly, and Twilio webhooks all verify signatures and reject unsigned/invalid requests.
+
+**Found and fixed in this pass:**
+1. **Credit-alert webhook failed open.** `app/api/webhooks/credit-alert/route.ts` only checked the signature `if (secret)` — meaning for any vendor whose `*_WEBHOOK_SECRET` env var isn't set yet, the endpoint accepted an unsigned POST and would write a fabricated `credit_alerts` row for any guessed vendor+borrower combination. Currently low-risk in practice (`CREDIT_ALERTS_LIVE=false`, no vendor wired up), but the code shouldn't depend on that being remembered. Now fails closed (401) unconditionally when the secret is missing or the signature doesn't match.
+2. **No rate limiting anywhere.** Every no-session route (portal token verify, MFA challenge/verify, AI chat, sign-in/up) had no request-volume ceiling at all. Token entropy makes brute-forcing a single 256-bit portal token infeasible, but that didn't cover: spamming a client's inbox via the MFA-challenge email, running up Anthropic API costs through the portal chat endpoint, or general scripted scraping. Added `lib/rateLimit.ts` (Upstash Redis, sliding window, edge-compatible) wired into `middleware.ts` at the same choke point that already exempts these routes from Clerk auth:
+   - MFA challenge: 5 / 10 min (it sends real email)
+   - MFA verify: 20 / 10 min (defense in depth on top of the existing 5-attempts-per-challenge cap)
+   - Portal AI chat: 15 / min (cost-abuse surface)
+   - Portal routes generally: 120 / min (coarse scraping/DoS backstop)
+   - Sign-in/sign-up: 30 / min (defense in depth on top of Clerk's own protections)
+   - Fails **open** if `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` aren't set, so it doesn't block deploys before Upstash is provisioned — but it does nothing until those are set. **Action needed: create a free Upstash Redis database and set those two env vars in Vercel.**
+3. **No automated secret or dependency scanning.** This repo lives on GitHub under the `primemindlabs` org, but the code and client data belong to EquityNest Capital — a leaked key here is a real incident, not a formality. Added:
+   - `.github/workflows/security.yml` — gitleaks secret scan + `npm audit --audit-level=high` + typecheck/build, on every push, PR, and weekly cron.
+   - `.github/dependabot.yml` — weekly dependency PRs, security patches open immediately regardless of grouping.
+   - `.gitleaks.toml` — repo-specific allowlist so `.env.example` placeholders don't trigger false positives.
+   - **Action needed (one-time, manual):** the CI scan only covers commits going forward. Run `gitleaks detect` locally against full git history once — `.env` is gitignored so this is likely clean, but worth confirming nothing was committed before the ignore rule existed.
+
+**Still open, same as the original audit — unchanged, not re-litigated here:** annual penetration test (needs a vendor), formal breach-notification runbook beyond what's in the IR plan, login-notification email on new device (deliberately deferred so it's designed alongside any future MFA UX changes rather than bolted on).
+
+**Explicitly not built, and why:** automated credit-report import via stored third-party (SmartCredit/IdentityIQ) login credentials + browser automation — the mechanism DisputeFox appears to use. Storing a large number of clients' financial-site passwords is the single highest-value target this system could create for an attacker, is very likely a ToS violation of the monitoring service being scraped, and directly conflicts with everything else in this document. The AI-parsed PDF upload flow (`/credit-reports`) stays the report-import path.

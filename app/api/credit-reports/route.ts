@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { parseCreditReportPdf } from '@/lib/creditReport/parse';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 120; // PDF parsing via Claude can take a while for a long report
 
 // Coach-facing: list uploads + parse status for an enrollment.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -25,11 +26,11 @@ export async function GET(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ uploads: uploads ?? [] });
-}
+});
 
 // Upload a credit report PDF, parse it with Claude, and import tradelines +
 // scores. multipart/form-data: file, enrollmentId, sourceBureau.
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -139,4 +140,4 @@ export async function POST(req: Request) {
     await sb.from('credit_report_uploads').update({ parse_status: 'failed', parse_error: message }).eq('id', uploadRow.id);
     return NextResponse.json({ error: message, uploadId: uploadRow.id }, { status: 502 });
   }
-}
+});

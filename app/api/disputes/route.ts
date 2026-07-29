@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // List + review dispute letters (drafts awaiting approval, and sent/response history).
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const url = new URL(req.url);
@@ -19,10 +20,10 @@ export async function GET(req: Request) {
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ disputes: data ?? [] });
-}
+});
 
 // Edit a drafted letter's body before approval — coaches can hand-tune AI output.
-export async function PATCH(req: Request) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { id?: string; letter_body?: string };
@@ -31,4 +32,4 @@ export async function PATCH(req: Request) {
   const { error } = await sb.from('credit_disputes').update({ letter_body: b.letter_body }).eq('id', b.id).eq('org_id', orgId).is('sent_at', null);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
-}
+});

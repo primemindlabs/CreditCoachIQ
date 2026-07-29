@@ -2,11 +2,12 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assertTierIncludes, PlanGateError } from '@/lib/plans';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // A coach-built sequence of target lenders/cards for a client's credit stack.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -17,9 +18,9 @@ export async function GET(req: Request) {
   const { data, error } = await query.order('created_at', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ plans: data ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -55,9 +56,9 @@ export async function POST(req: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ plan: data });
-}
+});
 
-export async function PATCH(req: Request) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { id?: string; status?: string; planned_sequence?: unknown; target_capital?: number };
@@ -70,4 +71,4 @@ export async function PATCH(req: Request) {
   const { error } = await sb.from('credit_stack_plans').update(patch).eq('id', b.id).eq('org_id', orgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
-}
+});

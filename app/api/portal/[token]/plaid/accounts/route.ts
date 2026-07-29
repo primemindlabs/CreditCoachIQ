@@ -2,10 +2,11 @@ import { NextResponse } from 'next/server';
 import { verifyPortalToken, requestMeta } from '@/lib/portal/token';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { isPlaidConfigured } from '@/lib/plaid';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/plaid/accounts'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -19,13 +20,13 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   ]);
 
   return NextResponse.json({ configured: true, accounts: accounts ?? [], recentTransactions: recentTransactions ?? [] });
-}
+});
 
 // Client-initiated unlink — revokes local visibility immediately; a full
 // Plaid /item/remove call can be added here once real linked accounts exist
 // to test against (safe to leave as a status flip today, since sync already
 // checks status = 'active' before pulling).
-export async function DELETE(req: Request, { params }: { params: { token: string } }) {
+export const DELETE = withErrorHandling(async function DELETE(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/plaid/accounts'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -38,4 +39,4 @@ export async function DELETE(req: Request, { params }: { params: { token: string
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
-}
+});

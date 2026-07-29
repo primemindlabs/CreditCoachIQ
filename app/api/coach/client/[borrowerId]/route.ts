@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Consolidated client-detail payload for the coach dashboard's borrower
 // page — one call instead of composing a dozen separate fetches for data
 // that's always viewed together.
-export async function GET(_req: Request, { params }: { params: { borrowerId: string } }) {
+export const GET = withErrorHandling(async function GET(_req: Request, { params }: { params: { borrowerId: string } }) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -54,4 +55,4 @@ export async function GET(_req: Request, { params }: { params: { borrowerId: str
     referralPartnerName,
     scoreHistory,
   });
-}
+});

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { hasPermission } from '@/lib/auth/permissions';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +10,7 @@ export const dynamic = 'force-dynamic';
 // separate from credit_disputes (which is the letter-drafting pipeline).
 // This is the durable record when something escalates beyond normal
 // handling: a client complaint, a bureau non-response, a billing dispute.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!hasPermission(role, 'manage_complaints')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -30,9 +31,9 @@ export async function GET(req: Request) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ complaints: data ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!hasPermission(role, 'manage_complaints')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -80,4 +81,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true, id: complaint.id });
-}
+});

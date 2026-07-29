@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 const STATUSES = ['planned', 'applied', 'approved', 'denied', 'active', 'promo_expired', 'closed'];
 
 // Individual card/lender applications under a stack plan.
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ application: data });
-}
+});
 
 // PATCH — record an application outcome (approved/denied/active) and its promo terms.
 // This is also where the deferred-interest disclosure requirement lives: any
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
 // paired with client-facing copy stating the promo end date plainly (enforced
 // in the UI layer, not the API — but promo_apr_ends_at is required here so
 // the alerting in /summary has something to key off).
-export async function PATCH(req: Request) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -68,4 +69,4 @@ export async function PATCH(req: Request) {
   const { error } = await sb.from('credit_stack_applications').update(patch).eq('id', b.id).eq('org_id', orgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
-}
+});

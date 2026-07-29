@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Coach-configurable loan-ready checklist for a client — the gate checked
 // by lib/journey.ts before a client can advance to `loan_ready`.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const borrowerId = new URL(req.url).searchParams.get('borrower_id');
@@ -15,9 +16,9 @@ export async function GET(req: Request) {
   const { data, error } = await sb.from('loan_ready_checklist_items').select('*').eq('org_id', orgId).eq('borrower_id', borrowerId).order('created_at');
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ items: data ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
@@ -28,10 +29,10 @@ export async function POST(req: Request) {
   }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ item: data });
-}
+});
 
 // PATCH — check off an item. Always requires the verifying coach's profile id.
-export async function PATCH(req: Request) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const b = (await req.json().catch(() => ({}))) as { id?: string; completed?: boolean };
@@ -44,4 +45,4 @@ export async function PATCH(req: Request) {
   const { error } = await sb.from('loan_ready_checklist_items').update(patch).eq('id', b.id).eq('org_id', orgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
-}
+});

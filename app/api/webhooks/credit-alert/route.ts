@@ -35,11 +35,17 @@ export async function POST(req: Request) {
   const vendor = (req.headers.get('x-credit-vendor') ?? 'unknown').toLowerCase();
   const body = await req.text();
 
+  // Fail CLOSED: an unrecognized vendor or a recognized vendor whose secret
+  // isn't configured yet must be rejected, not silently accepted. The old
+  // `if (secret) { verify... }` shape skipped verification entirely whenever
+  // secret was falsy — meaning before a vendor is wired up, this endpoint
+  // would accept an unauthenticated POST with a guessed vendor+borrower id
+  // and write a fabricated credit_alerts row. No vendor is live yet
+  // (CREDIT_ALERTS_LIVE=false), but the code shouldn't rely on that being
+  // remembered — it should be structurally safe either way.
   const secret = process.env[SECRET_ENV[vendor] ?? ''] ?? '';
-  if (secret) {
-    if (!verify(body, req.headers.get('x-credit-signature') ?? '', secret)) {
-      return new NextResponse('Unauthorized', { status: 401 });
-    }
+  if (!secret || !verify(body, req.headers.get('x-credit-signature') ?? '', secret)) {
+    return new NextResponse('Unauthorized', { status: 401 });
   }
 
   let payload: unknown;

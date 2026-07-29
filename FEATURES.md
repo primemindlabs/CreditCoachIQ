@@ -165,6 +165,17 @@ See `DISPUTEFOX_PARITY_SCOPE.md` for the full 8-item competitive scope this clos
 - ✅ **Bulk dispute letter send**: no new integration — `app/api/disputes/send` already accepted an array of dispute IDs and Lob was already sending certified mail (`extra_service: 'certified'`). Added multi-select checkboxes + a "Send N selected" action on the dispute-letters panel.
 - ✅ **Dialer call notes**: `call_logs.notes` column + a `PATCH` on `app/api/coach/dialer`; editable per-call notes field on the Recent Calls panel (the call button, Twilio bridging, and status webhook were already built — this closes the one missing piece, post-call notes).
 
+## Module Q — "Hacker/leak-proof" hardening pass
+
+Triggered by: "how can we make it hacker and leak proof like disputefox." Full writeup and rationale in `SECURITY_AUDIT.md`'s addendum — this re-checked the whole system, not just the portal, against a "could this actually be exploited" bar rather than a compliance checklist.
+
+- ✅ **Fixed a real fail-open bug**: `app/api/webhooks/credit-alert/route.ts` skipped signature verification entirely whenever a vendor's webhook secret wasn't set, meaning an unsigned POST with a guessed vendor+borrower id would have been accepted and written a fake `credit_alerts` row. Now fails closed (401) unconditionally.
+- ✅ **Rate limiting added everywhere it was missing**: `lib/rateLimit.ts` (Upstash Redis, sliding window, edge-compatible — fails open if unconfigured so it doesn't block deploys) wired into `middleware.ts` at the choke point that already exempts no-session routes from Clerk auth. Covers portal MFA challenge/verify, portal AI chat, portal routes generally, unsubscribe, and sign-in/up.
+- ✅ **CI-level secret + dependency scanning**: `.github/workflows/security.yml` (gitleaks + `npm audit --audit-level=high` + typecheck/build, on push/PR/weekly), `.github/dependabot.yml` (weekly dependency PRs), `.gitleaks.toml` (repo-specific allowlist for `.env.example` placeholders).
+- ✅ Verified (not just assumed): no SSN anywhere in the schema; EIN + Plaid tokens already AES-256-GCM encrypted; portal tokens already SHA-256 hashed at rest; Stripe/Calendly/Twilio webhooks already fail closed on bad/missing signatures.
+- 🔜 Action needed from EquityNest: create a free Upstash Redis database, set `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` in Vercel (rate limiting is inert until then); run `gitleaks detect` once locally against full git history (CI only covers commits going forward).
+- ❌ **Explicitly not built**: automated credit-report import via stored client SmartCredit/IdentityIQ login credentials + browser automation (the mechanism DisputeFox appears to use). Storing a large number of clients' financial-site passwords would be the single highest-value breach target this system could create, is very likely a ToS violation of the service being scraped, and directly conflicts with everything else in this module. Stays out of scope; see `SECURITY_AUDIT.md` addendum for the full reasoning.
+
 ## What's genuinely deferred (not built this pass, and why)
 
 - **No-show detection for bookings** — Calendly doesn't fire a distinct webhook for no-shows; would need a scheduled sweep of past-due `scheduled` call_bookings.

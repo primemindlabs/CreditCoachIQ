@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
  * — this just aggregates it into one call instead of five separate
  * client-side fetches, same pattern as /api/coach/client/[borrowerId].
  */
-export async function GET() {
+export const GET = withErrorHandling(async function GET() {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -118,4 +119,4 @@ export async function GET() {
     newLeadsCount: newLeadsRes.count ?? 0,
     scoreJumps,
   });
-}
+});

@@ -32,10 +32,18 @@ export default function PortalShell({ token, children }: { token: string; childr
   const checkStatus = useCallback(async () => {
     try {
       const res = await fetch(`/api/portal/${token}/status`);
-      const data = await res.json();
-      if (!data.valid) return setGate('invalid');
+      if (!res.ok) {
+        // A server-side error (e.g. a misconfigured env var) is not the same
+        // as an invalid/expired link — don't tell a real client their link
+        // is dead when the actual problem is on our end.
+        setError('Something went wrong loading your portal. Try refreshing, or contact your coach.');
+        return setGate('invalid');
+      }
+      const data = await res.json().catch(() => null);
+      if (!data?.valid) return setGate('invalid');
       setGate(data.mfaCurrent ? 'ready' : 'needs_mfa');
     } catch {
+      setError('Could not reach the server. Check your connection and try again.');
       setGate('invalid');
     }
   }, [token]);
@@ -45,11 +53,19 @@ export default function PortalShell({ token, children }: { token: string; childr
   const sendCode = useCallback(async () => {
     setSending(true);
     setError(null);
-    const res = await fetch(`/api/portal/${token}/mfa/challenge`, { method: 'POST' });
-    const data = await res.json();
-    setSending(false);
-    if (!res.ok) return setError(data.error ?? 'Could not send code');
-    setOtpSent(true);
+    try {
+      const res = await fetch(`/api/portal/${token}/mfa/challenge`, { method: 'POST' });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setSending(false);
+        return setError(data.error ?? `Could not send code (${res.status}).`);
+      }
+      setSending(false);
+      setOtpSent(true);
+    } catch {
+      setSending(false);
+      setError('Could not reach the server. Check your connection and try again.');
+    }
   }, [token]);
 
   useEffect(() => {
@@ -58,14 +74,20 @@ export default function PortalShell({ token, children }: { token: string; childr
 
   async function verifyCode() {
     setError(null);
-    const res = await fetch(`/api/portal/${token}/mfa/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code }),
-    });
-    const data = await res.json();
-    if (!res.ok) return setError(data.error ?? 'Incorrect code');
-    setGate('ready');
+    try {
+      const res = await fetch(`/api/portal/${token}/mfa/verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        return setError(data.error ?? `Incorrect code (${res.status}).`);
+      }
+      setGate('ready');
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    }
   }
 
   if (gate === 'checking') {

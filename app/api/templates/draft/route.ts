@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { draftMessageCopy } from '@/lib/ai/templateDraft';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (role !== 'admin' && role !== 'coach') return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -15,4 +16,4 @@ export async function POST(req: Request) {
 
   const draft = await draftMessageCopy({ purpose: body.purpose.trim(), channel: body.channel });
   return NextResponse.json(draft);
-}
+});

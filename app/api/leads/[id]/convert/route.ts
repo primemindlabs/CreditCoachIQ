@@ -4,6 +4,7 @@ import { hasPermission } from '@/lib/auth/permissions';
 import { createAdminClient } from '@/lib/supabase/admin';
 import getStripe from '@/lib/stripe';
 import { fireTrigger } from '@/lib/messaging/triggers';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -15,7 +16,7 @@ export const runtime = 'nodejs';
  * already exists — no upsert-by-external-id needed since there's only one
  * identity record involved.
  */
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { id: string } }) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!hasPermission(role, 'manage_intake')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -85,4 +86,4 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   void fireTrigger(orgId, 'client_enrolled', { borrowerId: borrower.id as string });
 
   return NextResponse.json({ enrollmentId: enrollment.id, borrowerId: borrower.id });
-}
+});

@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendSms, TWILIO_FROM } from '@/lib/sms';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 // Thread view for a borrower — opening it marks unread inbound texts read,
 // same "viewing marks read" behavior as the portal message thread.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -29,9 +30,9 @@ export async function GET(req: Request) {
     .eq('org_id', orgId).eq('borrower_id', borrowerId).eq('direction', 'inbound').is('read_at', null);
 
   return NextResponse.json({ messages: messages ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -62,4 +63,4 @@ export async function POST(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
-}
+});

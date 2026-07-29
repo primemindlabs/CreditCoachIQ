@@ -2,12 +2,13 @@ import { NextResponse } from 'next/server';
 import { verifyPortalToken, requestMeta } from '@/lib/portal/token';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCallAllowance } from '@/lib/plans';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // The client-facing "home" view: where they are, what's next, and enough of
 // a snapshot that logging in feels like real information, not a stub page.
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/overview'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -76,4 +77,4 @@ export async function GET(req: Request, { params }: { params: { token: string } 
     callAllowance: { used: callsUsed ?? 0, total: allowance, remaining: Math.max(0, allowance - (callsUsed ?? 0)) },
     unreadMessages: (unreadMessages as unknown as { count?: number })?.count ?? 0,
   });
-}
+});

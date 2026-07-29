@@ -1,0 +1,24 @@
+# Repo-specific gitleaks config. Runs in CI (.github/workflows/security.yml)
+# and can also run locally: `gitleaks detect --config .gitleaks.toml`.
+# Since this repo lives under the primemindlabs GitHub org but the code and
+# data belong to EquityNest Capital, a leaked secret here is worse than an
+# ordinary internal repo — treat any hit as real until proven otherwise.
+
+title = "CreditCoachIQ gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known-safe placeholders"
+regexes = [
+  '''placeholder''',
+  '''sk_test_placeholder''',
+  '''pk_test_placeholder''',
+  '''your[_-]?(api|secret)[_-]?key[_-]?here''',
+]
+paths = [
+  '''\.env\.example$''',
+  '''node_modules/''',
+  '''\.next/''',
+]

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { createDisputeForTradeline } from '@/lib/disputes/letters';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -13,7 +14,7 @@ export const runtime = 'nodejs';
  * A coach must separately review + call POST /api/disputes/send to mail
  * anything. Gated on the CROA disclosure already being signed.
  */
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -66,4 +67,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ letters, count: letters.length });
-}
+});

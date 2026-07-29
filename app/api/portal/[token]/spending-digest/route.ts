@@ -4,10 +4,11 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { isPlaidConfigured } from '@/lib/plaid';
 import { assertTierIncludes, PlanGateError } from '@/lib/plans';
 import { generateSpendingDigest } from '@/lib/ai/spendingDigest';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/spending-digest'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -39,4 +40,4 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   });
 
   return NextResponse.json({ configured: true, digest });
-}
+});

@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, { params }: { params: { id: string } }) {
+export const GET = withErrorHandling(async function GET(_req: Request, { params }: { params: { id: string } }) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -17,9 +18,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (!partner) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
   return NextResponse.json({ partner, clients: clients ?? [], events: events ?? [] });
-}
+});
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -40,4 +41,4 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ partner: data });
-}
+});

@@ -3,6 +3,7 @@ import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import getStripe from '@/lib/stripe';
 import type { PlanTier } from '@/lib/plans';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,7 +19,7 @@ const TIER_PRICE_ENV: Record<PlanTier, string> = {
  * proration (Stripe computes the credit/charge automatically). If they
  * don't have one yet, returns a Checkout Session URL instead.
  */
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -63,4 +64,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true, mode: 'checkout_required', checkoutUrl: session.url });
-}
+});

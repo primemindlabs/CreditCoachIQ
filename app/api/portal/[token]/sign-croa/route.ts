@@ -3,13 +3,14 @@ import { verifyPortalToken, requestMeta } from '@/lib/portal/token';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { hashDocument, buildSignatureRecord, type SignatureCaptureResult } from '@/lib/signing';
 import { CROA_CONSUMER_RIGHTS_STATEMENT, CROA_CONTRACT_TEXT } from '@/lib/legal/croaDisclosure';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // The dispute-generate route (app/api/disputes/generate) is gated on
 // credit_repair_enrollments.croa_disclosure_signed_at — no dispute letters
 // can be drafted for a client until they've signed here.
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/sign-croa'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -30,9 +31,9 @@ export async function GET(req: Request, { params }: { params: { token: string } 
     consumerRightsStatement: CROA_CONSUMER_RIGHTS_STATEMENT,
     contractText: CROA_CONTRACT_TEXT,
   });
-}
+});
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/sign-croa'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -77,4 +78,4 @@ export async function POST(req: Request, { params }: { params: { token: string }
   await sb.from('portal_access_log').insert({ org_id: ctx.orgId, borrower_id: ctx.borrowerId, portal_token_id: ctx.portalTokenId, event: 'croa_signed' });
 
   return NextResponse.json({ ok: true, signedAt });
-}
+});

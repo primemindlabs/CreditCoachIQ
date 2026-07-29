@@ -3,6 +3,7 @@ import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assertTierIncludes, PlanGateError } from '@/lib/plans';
 import { encrypt, decrypt, maskTail } from '@/lib/crypto/encrypt';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -12,7 +13,7 @@ export const dynamic = 'force-dynamic';
 // written or logged as plaintext. Full EIN is only decrypted here, for an
 // authenticated coach viewing their own org's data; nothing else in the
 // app reads ein_encrypted directly.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -34,9 +35,9 @@ export async function GET(req: Request) {
   });
 
   return NextResponse.json({ profiles });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -74,4 +75,4 @@ export async function POST(req: Request) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ profile: data });
-}
+});

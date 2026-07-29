@@ -3,11 +3,12 @@ import { verifyPortalToken, requestMeta } from '@/lib/portal/token';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { assertTierIncludes, PlanGateError } from '@/lib/plans';
 import { askPortalAssistant, type ChatTurn } from '@/lib/ai/portalAssistant';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-export async function POST(req: Request, { params }: { params: { token: string } }) {
+export const POST = withErrorHandling(async function POST(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/chat'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -71,4 +72,4 @@ export async function POST(req: Request, { params }: { params: { token: string }
   });
 
   return NextResponse.json({ answer });
-}
+});

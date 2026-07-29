@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const borrowerId = new URL(req.url).searchParams.get('borrower_id');
@@ -13,9 +14,9 @@ export async function GET(req: Request) {
   const { data, error } = await sb.from('budgets').select('*, budget_categories(*)').eq('org_id', orgId).eq('borrower_id', borrowerId).order('month', { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ budgets: data ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sb = createAdminClient();
@@ -41,4 +42,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ budget });
-}
+});

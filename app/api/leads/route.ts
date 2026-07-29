@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { hasPermission } from '@/lib/auth/permissions';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Pre-enrollment leads list. A lead is a borrowers row with
 // lead_status != 'converted' — see migration 0013 for why this isn't a
 // separate table.
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -27,13 +28,13 @@ export async function GET(req: Request) {
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ leads: data ?? [] });
-}
+});
 
 // Manual lead creation — a coach entering a prospect who called in, was
 // referred, or came from anywhere other than the (not-yet-built) public
 // web-form intake. Deliberately does NOT create a Stripe customer or
 // enrollment — that only happens on /api/leads/[id]/convert.
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!hasPermission(role, 'manage_intake')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -86,4 +87,4 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json({ ok: true, id: lead.id });
-}
+});

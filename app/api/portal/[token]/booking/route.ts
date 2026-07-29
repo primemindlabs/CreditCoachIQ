@@ -3,6 +3,7 @@ import { verifyPortalToken, requestMeta } from '@/lib/portal/token';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { getCallAllowance } from '@/lib/plans';
 import { buildSchedulingUrl } from '@/lib/calendly';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,7 +11,7 @@ export const dynamic = 'force-dynamic';
 // client's remaining call allowance for their plan tier. The booking itself
 // happens on Calendly; app/api/webhooks/calendly is the source of truth for
 // what actually got scheduled — this route only gates *access* to the link.
-export async function GET(req: Request, { params }: { params: { token: string } }) {
+export const GET = withErrorHandling(async function GET(req: Request, { params }: { params: { token: string } }) {
   const ctx = await verifyPortalToken(params.token, requestMeta(req, '/portal/booking'));
   if (!ctx) return NextResponse.json({ error: 'Invalid or expired link' }, { status: 401 });
   if (!ctx.mfaCurrent) return NextResponse.json({ error: 'Verification required', code: 'mfa_required' }, { status: 401 });
@@ -47,4 +48,4 @@ export async function GET(req: Request, { params }: { params: { token: string } 
   });
 
   return NextResponse.json({ canBook: true, schedulingUrl: url, allowance: { used: used ?? 0, total: allowance, remaining }, upcoming: upcoming ?? null });
-}
+});

@@ -38,12 +38,22 @@ export default function AnalyticsPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/analytics').then(async (res) => {
-      const d = await res.json();
-      if (!res.ok) { setError(d.error ?? 'Could not load analytics'); setLoading(false); return; }
-      setData(d);
-      setLoading(false);
-    });
+    fetch('/api/analytics')
+      .then(async (res) => {
+        if (!res.ok) {
+          const d = await res.json().catch(() => ({}));
+          setError(d.error ?? `Could not load analytics (${res.status}).`);
+          setLoading(false);
+          return;
+        }
+        const d = await res.json();
+        setData(d);
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('Could not reach the server. Check your connection and try again.');
+        setLoading(false);
+      });
   }, []);
 
   if (loading) return <p className="text-sm text-muted">Loading…</p>;

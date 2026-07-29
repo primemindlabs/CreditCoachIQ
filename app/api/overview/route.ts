@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
 // Agency-side summary: counts, recent notifications, enrolled borrowers.
 // Adapted from conduit-next's app/api/credit-repair/overview/route.ts —
 // joins `borrowers` (local) instead of conduit-next's `leads`.
-export async function GET(): Promise<NextResponse> {
+export const GET = withErrorHandling(async function GET(): Promise<NextResponse> {
   const { userId, orgId } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -45,4 +46,4 @@ export async function GET(): Promise<NextResponse> {
     notifications: notifications ?? [],
     enrollments: list,
   });
-}
+});

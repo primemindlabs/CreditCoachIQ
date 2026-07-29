@@ -11,10 +11,11 @@
  */
 import { NextRequest, NextResponse } from 'next/server';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
+export const GET = withErrorHandling(async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
   const channel = req.nextUrl.searchParams.get('channel') ?? 'email';
   if (!token) return NextResponse.json({ error: 'Missing token' }, { status: 400 });
@@ -30,4 +31,4 @@ export async function GET(req: NextRequest) {
   await sb.from('borrowers').update(patch).eq('id', borrower.id);
 
   return NextResponse.json({ ok: true, message: 'You have been unsubscribed.' });
-}
+});

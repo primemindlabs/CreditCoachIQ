@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -17,7 +18,7 @@ export const dynamic = 'force-dynamic';
 const VENDORS = ['creditxpert', 'factual_data', 'softpull', 'scoremaster', 'credco', 'xactus', 'meridianlink', 'other'];
 const TYPES = ['inquiry_alert', 'score_change', 'score_improvement', 'full'];
 
-export async function GET(req: Request) {
+export const GET = withErrorHandling(async function GET(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 });
@@ -32,9 +33,9 @@ export async function GET(req: Request) {
   }
   const { data } = await sb.from('credit_monitoring_enrollments').select('*, borrowers(first_name, last_name)').eq('org_id', orgId).eq('is_active', true).order('enrolled_at', { ascending: false }).limit(500);
   return NextResponse.json({ enrollments: data ?? [] });
-}
+});
 
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async function POST(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 });
@@ -52,9 +53,9 @@ export async function POST(req: Request) {
   }, { onConflict: 'vendor,vendor_borrower_id,org_id' }).select('*').single();
   if (error) { console.error('[credit-monitoring] enroll', error); return NextResponse.json({ error: 'save_failed' }, { status: 500 }); }
   return NextResponse.json({ enrollment: data });
-}
+});
 
-export async function PATCH(req: Request) {
+export const PATCH = withErrorHandling(async function PATCH(req: Request) {
   const { userId, orgId } = await getOrgContext();
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 });
@@ -66,4 +67,4 @@ export async function PATCH(req: Request) {
   else if (typeof b.is_active === 'boolean') patch.is_active = b.is_active;
   await sb.from('credit_monitoring_enrollments').update(patch).eq('id', b.id).eq('org_id', orgId);
   return NextResponse.json({ ok: true });
-}
+});
