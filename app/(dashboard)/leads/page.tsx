@@ -41,11 +41,24 @@ export default function LeadsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', leadSource: 'manual', interestLevel: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const d = await fetch('/api/leads').then((r) => r.json());
-    setLeads(d.leads ?? []);
+    setError(null);
+    try {
+      const res = await fetch('/api/leads');
+      const d = await res.json();
+      if (!res.ok) {
+        setError(d.error ?? `Could not load leads (${res.status}).`);
+        setLeads([]);
+      } else {
+        setLeads(d.leads ?? []);
+      }
+    } catch {
+      setError('Could not reach the server.');
+      setLeads([]);
+    }
     setLoading(false);
   }, []);
 
@@ -61,24 +74,46 @@ export default function LeadsPage() {
   async function submit() {
     if (!form.firstName.trim() || !form.lastName.trim()) return;
     setSubmitting(true);
-    await fetch('/api/leads', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, interestLevel: form.interestLevel || undefined }),
-    });
-    setSubmitting(false);
-    setShowForm(false);
-    setForm({ firstName: '', lastName: '', email: '', phone: '', leadSource: 'manual', interestLevel: '' });
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, interestLevel: form.interestLevel || undefined }),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setError(d.error ?? `Could not save this lead (${res.status}).`);
+        setSubmitting(false);
+        return; // leave the form open and filled in so nothing is lost
+      }
+      setSubmitting(false);
+      setShowForm(false);
+      setForm({ firstName: '', lastName: '', email: '', phone: '', leadSource: 'manual', interestLevel: '' });
+      load();
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+      setSubmitting(false);
+    }
   }
 
   async function updateField(id: string, patch: { status?: string; interestLevel?: string }) {
-    await fetch(`/api/leads/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(patch),
-    });
-    load();
+    setError(null);
+    try {
+      const res = await fetch(`/api/leads/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      const d = await res.json();
+      if (!res.ok) {
+        setError(d.error ?? `Could not update this lead (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    }
   }
 
   return (
@@ -88,10 +123,16 @@ export default function LeadsPage() {
           <h1 className="text-[26px] font-medium text-ink">Leads</h1>
           <p className="mt-1 text-sm text-muted">Prospects before enrollment. Convert a lead from their detail page once they're ready.</p>
         </div>
-        <button onClick={() => setShowForm((s) => !s)} className="flex items-center gap-1.5 rounded-control bg-gradient-money px-4 py-2.5 text-sm font-medium text-white shadow-glow-money">
+        <button onClick={() => setShowForm((s) => !s)} className="flex items-center gap-1.5 rounded-control bg-ink px-3.5 py-2 text-sm font-medium text-white hover:bg-ink/90">
           <UserPlus size={14} strokeWidth={1.75} /> {showForm ? 'Cancel' : 'Add lead'}
         </button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">
+          {error}
+        </div>
+      )}
 
       {!loading && leads.length > 0 && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">

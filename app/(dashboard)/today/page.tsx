@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, Sparkles, UserPlus } from 'lucide-react';
+import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, UserPlus } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
 
 interface BorrowerRef { first_name: string; last_name: string }
@@ -32,6 +32,7 @@ export default function TodayPage() {
   const [loading, setLoading] = useState(true);
   const [briefing, setBriefing] = useState<string | null>(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,12 +53,22 @@ export default function TodayPage() {
   useEffect(() => { load(); }, [load]);
 
   async function completeTask(id: string) {
-    await fetch('/api/coach/tasks', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, completed: true }),
-    });
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/coach/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, completed: true }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not complete that task (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   const needsAttention = useMemo(() => {
@@ -75,16 +86,23 @@ export default function TodayPage() {
 
   return (
     <div>
-      <div className="mb-8 overflow-hidden rounded-card bg-gradient-dark p-8 text-white shadow-elevated">
-        <p className="text-[13px] text-white/50">Today</p>
-        <h1 className="mt-1 text-[32px] font-medium leading-tight">
-          {needsAttention === 0 ? "You're all caught up" : `${needsAttention} thing${needsAttention === 1 ? '' : 's'} need your attention`}
+      <div className="mb-8 border-b border-line pb-8">
+        <p className="text-[12px] uppercase tracking-wide text-muted">Today</p>
+        <h1 className="mt-1 text-[34px] font-medium leading-tight text-ink">
+          {needsAttention === 0 ? "You're all caught up" : (
+            <>
+              <span className="figure">{needsAttention}</span> thing{needsAttention === 1 ? '' : 's'} need your attention
+            </>
+          )}
         </h1>
-        <p className="mt-3 flex items-start gap-2 text-sm text-white/70">
-          <Sparkles size={14} strokeWidth={1.75} className="mt-0.5 shrink-0" />
-          <span>{briefingLoading ? 'Writing your briefing…' : (briefing ?? 'Everything below is pulled live.')}</span>
+        <p className="mt-3 max-w-2xl border-l-2 border-l-line pl-3 text-sm text-muted">
+          {briefingLoading ? 'Writing your briefing…' : (briefing ?? 'Everything below is pulled live.')}
         </p>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
+      )}
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-5">
         <StatCard label="Open tasks" value={data.tasks.length} accent={data.tasks.length > 0 ? 'iris' : undefined} icon={<CheckSquare size={16} strokeWidth={1.75} />} />

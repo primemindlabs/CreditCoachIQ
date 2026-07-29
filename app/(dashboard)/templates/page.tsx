@@ -16,6 +16,7 @@ export default function TemplatesPage() {
   const [body, setBody] = useState('');
   const [draftPurpose, setDraftPurpose] = useState('');
   const [drafting, setDrafting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
     const res = await fetch('/api/templates');
@@ -26,13 +27,23 @@ export default function TemplatesPage() {
 
   async function create() {
     if (!name.trim() || !body.trim()) return;
-    await fetch('/api/templates', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, channel, subject: channel === 'email' ? subject : undefined, body }),
-    });
-    setName(''); setSubject(''); setBody(''); setShowCreate(false);
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, channel, subject: channel === 'email' ? subject : undefined, body }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not save this template (${res.status}).`);
+        return;
+      }
+      setName(''); setSubject(''); setBody(''); setShowCreate(false);
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   function insertToken(token: string) {
@@ -63,6 +74,10 @@ export default function TemplatesPage() {
         </div>
         <button onClick={() => setShowCreate(true)} className="rounded-control bg-money px-5 py-3 text-sm font-medium text-white hover:bg-money-hover">New template</button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
+      )}
 
       {showCreate && (
         <div className="mb-8 rounded-card border border-line bg-white p-6">

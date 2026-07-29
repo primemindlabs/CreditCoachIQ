@@ -116,22 +116,40 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   }
 
   async function portalAction(action: 'revoke' | 'reissue') {
-    const res = await fetch('/api/coach/portal-access', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ borrowerId, action }),
-    });
-    const d = await res.json();
-    setPortalMsg(action === 'reissue' && d.portalUrl ? `New link: ${d.portalUrl}` : action === 'revoke' ? 'Portal access revoked.' : d.error ?? null);
+    try {
+      const res = await fetch('/api/coach/portal-access', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrowerId, action }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPortalMsg(d.error ?? `Could not ${action === 'revoke' ? 'revoke' : 'reissue'} portal access (${res.status}).`);
+        return;
+      }
+      setPortalMsg(action === 'reissue' && d.portalUrl ? `New link: ${d.portalUrl}` : 'Portal access revoked.');
+    } catch {
+      setPortalMsg('Could not reach the server.');
+    }
   }
 
   async function approveDispute(id: string) {
-    await fetch('/api/disputes/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ disputeIds: [id] }),
-    });
-    load();
+    try {
+      const res = await fetch('/api/disputes/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disputeIds: [id] }),
+      });
+      const d = await res.json().catch(() => ({}));
+      const failed = !res.ok || (d.results ?? []).some((r: { status: string }) => r.status === 'failed');
+      if (failed) {
+        const reason = d.results?.find((r: { status: string; error?: string }) => r.status === 'failed')?.error;
+        setPortalMsg(reason ?? d.error ?? 'Could not mail that letter.');
+      }
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server.');
+    }
   }
 
   function toggleDisputeSelect(id: string) {
@@ -145,39 +163,70 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   async function sendSelectedDisputes() {
     if (selectedDisputeIds.size === 0) return;
     setBulkSending(true);
-    await fetch('/api/disputes/send', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ disputeIds: Array.from(selectedDisputeIds) }),
-    });
-    setSelectedDisputeIds(new Set());
-    setBulkSending(false);
-    load();
+    try {
+      const res = await fetch('/api/disputes/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ disputeIds: Array.from(selectedDisputeIds) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      const results: { status: string; error?: string }[] = d.results ?? [];
+      const failedCount = results.filter((r) => r.status === 'failed').length;
+      if (!res.ok || failedCount > 0) {
+        setPortalMsg(`${failedCount || results.length} of ${selectedDisputeIds.size} letter(s) failed to send${d.error ? `: ${d.error}` : ''}.`);
+      }
+      setSelectedDisputeIds(new Set());
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server.');
+    } finally {
+      setBulkSending(false);
+    }
   }
 
   async function sendSmsMessage() {
     if (!smsDraft.trim()) return;
     setSmsSending(true);
-    const res = await fetch('/api/coach/sms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ borrowerId, body: smsDraft.trim() }),
-    });
-    if (res.ok) setSmsDraft('');
-    setSmsSending(false);
-    const thread = await fetch(`/api/coach/sms?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] }));
-    setSmsMessages(thread.messages ?? []);
+    try {
+      const res = await fetch('/api/coach/sms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrowerId, body: smsDraft.trim() }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPortalMsg(d.error ?? `Could not send that text (${res.status}).`);
+        setSmsSending(false);
+        return;
+      }
+      setSmsDraft('');
+      setSmsSending(false);
+      const thread = await fetch(`/api/coach/sms?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] }));
+      setSmsMessages(thread.messages ?? []);
+    } catch {
+      setPortalMsg('Could not reach the server.');
+      setSmsSending(false);
+    }
   }
 
   async function saveCallNotes(logId: string) {
     if (!(logId in callNoteDrafts)) return; // untouched — don't overwrite on a stray blur
     const notes = callNoteDrafts[logId];
-    await fetch('/api/coach/dialer', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ logId, notes }),
-    });
-    load();
+    try {
+      const res = await fetch('/api/coach/dialer', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ logId, notes }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not save that note (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server.');
+    }
   }
 
   async function convertLead() {
@@ -203,11 +252,11 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   return (
     <div>
       {/* Hero */}
-      <div className="mb-6 overflow-hidden rounded-card bg-gradient-dark p-8 text-white shadow-elevated">
+      <div className="mb-6 border-b border-line pb-8">
         <div className="flex flex-col items-start justify-between gap-8 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-[28px] font-medium leading-tight">{borrower.first_name} {borrower.last_name}</h1>
-            <p className="mt-2 text-sm text-white/60">
+            <h1 className="text-[26px] font-medium leading-tight text-ink">{borrower.first_name} {borrower.last_name}</h1>
+            <p className="mt-2 text-sm text-muted">
               {borrower.email ?? 'No email'} · {borrower.phone ?? 'No phone'} · {borrower.plan_tier.replace('_', ' ')}
               {data.referralPartnerName ? ` · Referred by ${data.referralPartnerName}` : ''}
             </p>
@@ -220,36 +269,36 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
             )}
             {scoreValues.length >= 2 && (
               <div className="mt-6">
-                <p className="mb-2 text-[11px] uppercase tracking-wide text-white/40">Score trend</p>
-                <Sparkline values={scoreValues} color="#16B872" width={180} height={44} />
+                <p className="mb-2 text-[11px] uppercase tracking-wide text-muted">Score trend</p>
+                <Sparkline values={scoreValues} color="#0F9D58" width={180} height={44} />
               </div>
             )}
             <div className="mt-6 flex flex-wrap gap-2">
-              <button onClick={placeCall} className="flex items-center gap-1.5 rounded-control bg-gradient-money px-4 py-2.5 text-sm font-medium text-white shadow-glow-money">
+              <button onClick={placeCall} className="flex items-center gap-1.5 rounded-control bg-ink px-3.5 py-2 text-sm font-medium text-white hover:bg-ink/90">
                 <Phone size={14} strokeWidth={1.75} /> Call
               </button>
-              <button onClick={() => portalAction('reissue')} className="flex items-center gap-1.5 rounded-control border border-white/20 px-4 py-2.5 text-sm text-white hover:bg-white/10">
+              <button onClick={() => portalAction('reissue')} className="flex items-center gap-1.5 rounded-control border border-line px-3.5 py-2 text-sm text-ink hover:border-ink/30">
                 <RefreshCw size={14} strokeWidth={1.75} /> Reissue portal link
               </button>
-              <button onClick={() => portalAction('revoke')} className="flex items-center gap-1.5 rounded-control border border-white/20 px-4 py-2.5 text-sm text-white hover:bg-white/10">
+              <button onClick={() => portalAction('revoke')} className="flex items-center gap-1.5 rounded-control border border-line px-3.5 py-2 text-sm text-ink hover:border-ink/30">
                 <ShieldOff size={14} strokeWidth={1.75} /> Revoke portal
               </button>
-              <button onClick={loadCallBrief} disabled={callBriefLoading} className="flex items-center gap-1.5 rounded-control bg-gradient-iris px-4 py-2.5 text-sm font-medium text-white shadow-glow-iris disabled:opacity-60">
+              <button onClick={loadCallBrief} disabled={callBriefLoading} className="flex items-center gap-1.5 rounded-control border border-line px-3.5 py-2 text-sm text-ink hover:border-ink/30 disabled:opacity-60">
                 <Sparkles size={14} strokeWidth={1.75} /> {callBriefLoading ? 'Writing…' : 'Call prep brief'}
               </button>
               {!enrollment && (
-                <button onClick={convertLead} disabled={converting} className="flex items-center gap-1.5 rounded-control bg-gold px-4 py-2.5 text-sm font-medium text-ink shadow-card disabled:opacity-60">
+                <button onClick={convertLead} disabled={converting} className="flex items-center gap-1.5 rounded-control bg-money px-3.5 py-2 text-sm font-medium text-white hover:bg-money-hover disabled:opacity-60">
                   <UserCheck size={14} strokeWidth={1.75} /> {converting ? 'Converting…' : 'Convert to client'}
                 </button>
               )}
             </div>
             {callBrief && (
-              <div className="mt-4 max-w-xl rounded-control bg-white/10 p-4 text-sm text-white/90">{callBrief}</div>
+              <div className="mt-4 max-w-xl rounded-control border border-line bg-paper p-4 text-sm text-ink">{callBrief}</div>
             )}
-            {callStatus && <p className="mt-3 text-sm text-white/60">{callStatus}</p>}
-            {portalMsg && <p className="mt-3 break-all text-sm text-white/60">{portalMsg}</p>}
+            {callStatus && <p className="mt-3 text-sm text-muted">{callStatus}</p>}
+            {portalMsg && <p className="mt-3 break-all text-sm text-muted">{portalMsg}</p>}
           </div>
-          <RadialScore score={enrollment?.current_score_exp ?? null} target={enrollment?.target_score ?? null} dark size={148} />
+          <RadialScore score={enrollment?.current_score_exp ?? null} target={enrollment?.target_score ?? null} size={140} />
         </div>
       </div>
 

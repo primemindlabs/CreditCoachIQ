@@ -103,3 +103,74 @@ corner radius (20px), the underlying `paper`/`ink`/`muted`/`line` tokens,
 one-primary-action-per-screen. The richer direction adds data density and
 one dark surface per screen — it doesn't abandon the restraint everywhere
 else.
+
+## v4 addendum — Mercury/Ramp, "engineered, not decorated"
+
+Direct user feedback: v3 had swung too far and now read as generic
+AI-scaffolded SaaS — the gradient buttons, glow shadows, and dark
+gradient hero cards are exactly the pattern every AI page-builder defaults
+to, so despite being intentional design choices they signaled the
+opposite of "$100k build." Confirmed reference: Mercury/Ramp specifically
+— quiet confidence, near-white canvas, tiny precise type, one accent used
+sparingly, monospace numerals, almost no ornamentation.
+
+**What's gone, entirely:**
+
+- **All `backgroundImage` gradient tokens** (`gradient-money`,
+  `gradient-iris`, `gradient-dark`) — removed from `tailwind.config.ts`,
+  not just unused. Every button and hero surface that used one is now a
+  flat solid fill (`bg-ink` for primary actions, `bg-money`/`bg-iris` only
+  where the color itself is the point, e.g. the "Convert to client"
+  button).
+- **`shadow-glow-money` / `shadow-glow-iris`** — the colored glow shadow
+  under buttons was the single biggest "AI template" tell. Gone. `card`/
+  `elevated` shadows are now hairline-level (`0 1px 2px` at rest) —
+  Mercury/Ramp cards sit flush against the canvas, the 1px border does the
+  work, not a shadow.
+- **Dark gradient "hero" cards** (portal overview, coach caseload detail,
+  Today) — the v3 hero pattern is gone entirely, replaced by a plain
+  bordered white card with oversized, precise type. No dark surface
+  anywhere in the app now (the `canvas.dark` token is unused but left
+  defined in case a genuine dark-mode toggle is ever built).
+- **Gradient-stroke `RadialScore` ring** — now a single solid stroke
+  (money green, or white on the rare dark context), thinner (6px not
+  10px).
+- **Colorful gradient avatar initials** on the caseload table — replaced
+  with a plain neutral bordered tile, uniform across every row (no
+  per-row color rotation — that randomized-color-avatar pattern is itself
+  a recognizable admin-template default).
+- **Sparkles icon as the "AI feature" signifier** — removed everywhere
+  (portal chat toggle, Today's briefing line). Sparkles-next-to-gradient-
+  pill is one of the most recognizable "this is an AI feature" visual
+  clichés; AI features here now look like any other feature — same
+  border, same type, no badge.
+
+**What's new:**
+
+- **Type split: prose vs. figures.** `Inter Tight` (via `next/font/google`,
+  properly loaded — the prior config referenced plain `Inter` but never
+  actually loaded it, so the app was silently falling back to the OS
+  system font) for all UI text and prose. `IBM Plex Mono` for every
+  number that matters — credit scores, dollar amounts, percentages, days-
+  in-stage, list counts. Applied via a `.figure` utility class
+  (`font-feature-settings` + `tabular-nums`, defined in `globals.css`).
+  This split is the actual mechanism behind the Mercury/Ramp feel, more
+  than any color choice — treating data as typographically distinct from
+  sentences is what makes a screen read as "built by people who handle
+  money for a living."
+- **Tighter geometry.** Card radius 20px → 10px, control/button radius
+  14px → 6px. Soft, pill-shaped everything reads as a toy; smaller,
+  consistent radii read as precise.
+- **`StatCard` accent as a rule, not a fill.** Previously a full gradient-
+  filled tile per accent color; now a plain white bordered tile with the
+  accent color as a 2px left border only. Same information, none of the
+  "colorful dashboard tile" decoration.
+- **Nav / logo mark simplified** to a small solid dot instead of a filled
+  gradient-and-glow circle, on both the coach dashboard header and the
+  portal header.
+
+**Unchanged from v2/v3:** the palette itself (`money` green, `iris`
+violet, `gold`, `terra`) — the hues were never the problem, the
+gradient/glow/pill *treatment* of them was. One-primary-action-per-screen,
+generous whitespace, and real-data-only sparklines/trends all still
+apply. This is a treatment change, not a rebrand.

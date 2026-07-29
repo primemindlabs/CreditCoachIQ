@@ -37,6 +37,7 @@ export default function ComplaintsPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ borrowerId: '', filedBy: 'client', category: 'service_quality', description: '' });
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -61,24 +62,46 @@ export default function ComplaintsPage() {
   async function submit() {
     if (!form.borrowerId || !form.description.trim()) return;
     setSubmitting(true);
-    await fetch('/api/compliance/complaints', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-    setSubmitting(false);
-    setShowForm(false);
-    setForm({ borrowerId: '', filedBy: 'client', category: 'service_quality', description: '' });
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/compliance/complaints', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(d.error ?? `Could not log this complaint (${res.status}).`);
+        setSubmitting(false);
+        return;
+      }
+      setSubmitting(false);
+      setShowForm(false);
+      setForm({ borrowerId: '', filedBy: 'client', category: 'service_quality', description: '' });
+      load();
+    } catch {
+      setError('Could not reach the server.');
+      setSubmitting(false);
+    }
   }
 
   async function updateStatus(id: string, status: string) {
-    await fetch(`/api/compliance/complaints/${id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
-    });
-    load();
+    setError(null);
+    try {
+      const res = await fetch(`/api/compliance/complaints/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not update that complaint (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   return (
@@ -88,10 +111,14 @@ export default function ComplaintsPage() {
           <h1 className="text-[26px] font-medium text-ink">Complaint log</h1>
           <p className="mt-1 text-sm text-muted">A durable record of any complaint or dispute-handling escalation — CROA-adjacent best practice.</p>
         </div>
-        <button onClick={() => setShowForm((s) => !s)} className="rounded-control bg-gradient-money px-4 py-2.5 text-sm font-medium text-white shadow-glow-money">
+        <button onClick={() => setShowForm((s) => !s)} className="rounded-control bg-ink px-3.5 py-2 text-sm font-medium text-white hover:bg-ink/90">
           {showForm ? 'Cancel' : 'Log a complaint'}
         </button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
+      )}
 
       {!loading && complaints.length > 0 && (
         <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">

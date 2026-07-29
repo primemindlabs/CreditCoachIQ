@@ -38,6 +38,7 @@ export default function CampaignsPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [triggerType, setTriggerType] = useState<TriggerType>('manual');
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
@@ -51,10 +52,20 @@ export default function CampaignsPage() {
 
   async function createCampaign() {
     if (!name.trim()) return;
-    await fetch('/api/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, trigger_type: triggerType }) });
-    setName('');
-    setShowCreate(false);
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, trigger_type: triggerType }) });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not create this campaign (${res.status}).`);
+        return;
+      }
+      setName('');
+      setShowCreate(false);
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   return (
@@ -68,6 +79,10 @@ export default function CampaignsPage() {
           New campaign
         </button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
+      )}
 
       {showCreate && (
         <div className="mb-8 rounded-card border border-line bg-white p-6">

@@ -29,6 +29,7 @@ export default function CampaignBuilderPage() {
   const [newChannel, setNewChannel] = useState<'email' | 'sms'>('email');
   const [newTemplate, setNewTemplate] = useState('');
   const [newDelay, setNewDelay] = useState(24);
+  const [error, setError] = useState<string | null>(null);
 
   async function load() {
     const [campRes, tplRes] = await Promise.all([fetch(`/api/campaigns/${id}`), fetch('/api/templates')]);
@@ -55,26 +56,46 @@ export default function CampaignBuilderPage() {
   function onDragEnd() { setDragIndex(null); }
 
   async function saveOrder() {
-    await fetch(`/api/campaigns/${id}/steps`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ steps: steps.map((s) => ({ channel: s.channel, template_id: s.template_id, delay_hours: s.delay_hours, condition: s.condition })) }),
-    });
-    setDirty(false);
-    load();
+    setError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/steps`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ steps: steps.map((s) => ({ channel: s.channel, template_id: s.template_id, delay_hours: s.delay_hours, condition: s.condition })) }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not save step order (${res.status}).`);
+        return;
+      }
+      setDirty(false);
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   async function addStep() {
     if (!newTemplate) return;
-    await fetch(`/api/campaigns/${id}/steps`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ channel: newChannel, template_id: newTemplate, delay_hours: newDelay }),
-    });
-    setShowAdd(false);
-    setNewTemplate('');
-    setNewDelay(24);
-    load();
+    setError(null);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/steps`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel: newChannel, template_id: newTemplate, delay_hours: newDelay }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not add that step (${res.status}).`);
+        return;
+      }
+      setShowAdd(false);
+      setNewTemplate('');
+      setNewDelay(24);
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   function removeStep(index: number) {
@@ -83,13 +104,33 @@ export default function CampaignBuilderPage() {
   }
 
   async function setStatus(status: string) {
-    await fetch('/api/campaigns', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) });
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/campaigns', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not update status (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   async function setStageTrigger(stage: string) {
-    await fetch('/api/campaigns', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, trigger_config: { stage } }) });
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/campaigns', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, trigger_config: { stage } }) });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not update trigger (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   if (!campaign) return <p className="text-sm text-muted">Loading…</p>;
@@ -113,6 +154,10 @@ export default function CampaignBuilderPage() {
           )}
         </div>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
+      )}
 
       {campaign.trigger_type === 'journey_stage_enter' && (
         <div className="mb-8 rounded-card border border-line bg-white p-5">

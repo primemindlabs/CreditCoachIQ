@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { Landmark, Phone, MessageCircle, Check, Lock, PartyPopper, X, Sparkles, Send } from 'lucide-react';
+import { Landmark, Phone, MessageCircle, Check, Lock, PartyPopper, X, Send } from 'lucide-react';
 import RadialScore from '@/components/ui/RadialScore';
 import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
@@ -203,22 +203,22 @@ export default function PortalOverviewPage({ params }: { params: { token: string
   return (
     <div className="space-y-6">
       {celebration && (
-        <div className="relative overflow-hidden rounded-card bg-gradient-money p-6 text-white shadow-glow-money">
-          <button onClick={() => setCelebration(null)} aria-label="Dismiss" className="absolute right-4 top-4 text-white/60 hover:text-white">
+        <div className="relative overflow-hidden rounded-card border border-line bg-money-tint p-6">
+          <button onClick={() => setCelebration(null)} aria-label="Dismiss" className="absolute right-4 top-4 text-money-hover/60 hover:text-money-hover">
             <X size={16} strokeWidth={1.75} />
           </button>
           <div className="flex items-center gap-4">
-            <PartyPopper size={28} strokeWidth={1.5} />
+            <PartyPopper size={24} strokeWidth={1.5} className="text-money-hover" />
             <div>
               {celebration.type === 'score' ? (
                 <>
-                  <p className="text-[17px] font-medium">Your score went up {celebration.delta} points!</p>
-                  <p className="mt-1 text-sm text-white/80">{scoreExplanation ?? `Now at ${celebration.score}. Keep it up.`}</p>
+                  <p className="text-[16px] font-medium text-ink">Your score went up <span className="figure">{celebration.delta}</span> points</p>
+                  <p className="mt-1 text-sm text-money-hover">{scoreExplanation ?? `Now at ${celebration.score}. Keep it up.`}</p>
                 </>
               ) : (
                 <>
-                  <p className="text-[17px] font-medium">Goal achieved: {celebration.title}</p>
-                  <p className="mt-1 text-sm text-white/80">Nice work — talk to your coach about what's next.</p>
+                  <p className="text-[16px] font-medium text-ink">Goal achieved: {celebration.title}</p>
+                  <p className="mt-1 text-sm text-money-hover">Nice work — talk to your coach about what's next.</p>
                 </>
               )}
             </div>
@@ -226,24 +226,25 @@ export default function PortalOverviewPage({ params }: { params: { token: string
         </div>
       )}
 
-      {/* Hero — the one "elite" moment on the screen: dark surface, gradient
-          score ring, real trend line (only renders with 2+ real data points). */}
-      <div className="overflow-hidden rounded-card bg-gradient-dark p-8 text-white shadow-elevated">
+      {/* Hero — the one moment on the screen with real weight, but flat:
+          bordered white card, oversized precise type, a plain score ring.
+          No dark surface, no gradient — see DESIGN_DIRECTION.md v4. */}
+      <div className="rounded-card border border-line bg-white p-8 shadow-card">
         <div className="flex flex-col items-start justify-between gap-8 sm:flex-row sm:items-center">
           <div>
-            <p className="text-[13px] text-white/50">{data.coachName ? `Coached by ${data.coachName}` : 'Welcome'}</p>
-            <h1 className="mt-1 text-[32px] font-medium leading-tight">Welcome back, {data.firstName}</h1>
-            <p className="mt-2 text-sm text-white/60">
+            <p className="text-[12px] uppercase tracking-wide text-muted">{data.coachName ? `Coached by ${data.coachName}` : 'Welcome'}</p>
+            <h1 className="mt-1 text-[30px] font-medium leading-tight text-ink">Welcome back, {data.firstName}</h1>
+            <p className="mt-2 text-sm text-muted">
               {data.planTier.replace('_', ' ')} plan · {(stageIndex >= 0 ? JOURNEY_STAGES[stageIndex].label : data.journeyStage.replace('_', ' '))}
             </p>
             {scoreValues.length >= 2 && (
               <div className="mt-6">
-                <p className="mb-2 text-[11px] uppercase tracking-wide text-white/40">Score trend</p>
-                <Sparkline values={scoreValues} color="#16B872" width={180} height={44} />
+                <p className="mb-2 text-[11px] uppercase tracking-wide text-muted">Score trend</p>
+                <Sparkline values={scoreValues} color="#0F9D58" width={180} height={44} />
               </div>
             )}
           </div>
-          {data.credit && <RadialScore score={data.credit.currentScore} target={data.credit.targetScore} dark size={148} />}
+          {data.credit && <RadialScore score={data.credit.currentScore} target={data.credit.targetScore} size={140} />}
         </div>
       </div>
 
@@ -254,7 +255,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
             <span className="text-xs text-muted">{checklistDone} of {checklist.length} done</span>
           </div>
           <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-line">
-            <div className="h-full rounded-full bg-gradient-money transition-all duration-700" style={{ width: `${(checklistDone / checklist.length) * 100}%` }} />
+            <div className="h-full rounded-full bg-money transition-all duration-700" style={{ width: `${(checklistDone / checklist.length) * 100}%` }} />
           </div>
           <div className="flex flex-wrap gap-2">
             {checklist.map((item) => (
@@ -284,8 +285,8 @@ export default function PortalOverviewPage({ params }: { params: { token: string
                 <div key={stage.key} className="flex flex-1 items-center last:flex-none">
                   <div className="flex flex-col items-center">
                     <div
-                      className={`flex h-9 w-9 items-center justify-center rounded-full text-xs font-medium ${
-                        current ? 'bg-gradient-money text-white shadow-glow-money' : done ? 'bg-money-tint text-money-hover' : 'bg-line text-muted'
+                      className={`figure flex h-9 w-9 items-center justify-center rounded-full text-xs font-medium ${
+                        current ? 'bg-money text-white' : done ? 'bg-money-tint text-money-hover' : 'bg-line text-muted'
                       }`}
                     >
                       {i + 1}
@@ -311,7 +312,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
             data.upcomingCall ? (
               `Next call ${new Date(data.upcomingCall.scheduled_at).toLocaleDateString()}`
             ) : (
-              <Link href={`/portal/${token}/booking`} className="text-white underline underline-offset-2 hover:no-underline">
+              <Link href={`/portal/${token}/booking`} className="text-money underline underline-offset-2 hover:no-underline">
                 Book a call →
               </Link>
             )
@@ -332,7 +333,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
                     <span className="text-muted">{currency(g.current_amount)} / {g.target_amount ? currency(g.target_amount) : '—'}</span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                    <div className="h-full rounded-full bg-gradient-money" style={{ width: `${pct}%` }} />
+                    <div className="h-full rounded-full bg-money" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
               );
@@ -414,8 +415,8 @@ export default function PortalOverviewPage({ params }: { params: { token: string
       <div className="fixed bottom-6 right-6 z-20">
         {chatOpen ? (
           <div className="flex h-[420px] w-[340px] flex-col overflow-hidden rounded-card border border-line bg-white shadow-elevated">
-            <div className="flex items-center justify-between border-b border-line bg-gradient-iris px-4 py-3 text-white">
-              <span className="flex items-center gap-1.5 text-sm font-medium"><Sparkles size={14} strokeWidth={1.75} /> Ask about your credit</span>
+            <div className="flex items-center justify-between border-b border-line bg-ink px-4 py-3 text-white">
+              <span className="text-sm font-medium">Ask about your credit</span>
               <button onClick={() => setChatOpen(false)} aria-label="Close"><X size={16} strokeWidth={1.75} /></button>
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
@@ -445,9 +446,9 @@ export default function PortalOverviewPage({ params }: { params: { token: string
         ) : (
           <button
             onClick={() => setChatOpen(true)}
-            className="flex items-center gap-2 rounded-full bg-gradient-iris px-5 py-3 text-sm font-medium text-white shadow-glow-iris"
+            className="flex items-center gap-2 rounded-control bg-ink px-4 py-2.5 text-sm font-medium text-white shadow-elevated hover:bg-ink/90"
           >
-            <Sparkles size={16} strokeWidth={1.75} /> Ask a question
+            <MessageCircle size={15} strokeWidth={1.75} /> Ask a question
           </button>
         )}
       </div>

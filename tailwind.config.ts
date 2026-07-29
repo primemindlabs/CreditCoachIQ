@@ -26,23 +26,23 @@ const config: Config = {
         gold: { DEFAULT: '#C9A05C', tint: '#F7EFDD' },
         canvas: { dark: '#111113', darkline: 'rgba(255,255,255,0.08)' },
       },
-      backgroundImage: {
-        'gradient-money': 'linear-gradient(135deg, #16B872 0%, #0B6B3A 100%)',
-        'gradient-iris': 'linear-gradient(135deg, #8578F5 0%, #4B3FA8 100%)',
-        'gradient-dark': 'linear-gradient(160deg, #1C1D20 0%, #0B0B0C 100%)',
-      },
+      // v4 addendum: no decorative backgroundImage gradients. Kept out
+      // entirely rather than left unused — the previous gradient-money/
+      // gradient-iris/gradient-dark tokens are what made buttons and hero
+      // cards read as generic AI-SaaS-template. See DESIGN_DIRECTION.md.
       boxShadow: {
-        card: '0 1px 2px rgba(20,20,20,0.04), 0 12px 28px -16px rgba(20,20,20,0.10)',
-        elevated: '0 4px 16px rgba(20,20,20,0.06), 0 24px 48px -20px rgba(20,20,20,0.16)',
-        'glow-money': '0 8px 30px -10px rgba(15,157,88,0.45)',
-        'glow-iris': '0 8px 30px -10px rgba(108,92,231,0.45)',
+        // Hairline-only at rest — Mercury/Ramp cards don't float, they sit
+        // flush against the canvas with a 1px border doing all the work.
+        card: '0 1px 2px rgba(10,10,10,0.04)',
+        elevated: '0 1px 3px rgba(10,10,10,0.06), 0 8px 24px -12px rgba(10,10,10,0.12)',
       },
       borderRadius: {
-        card: '20px',
-        control: '14px',
+        card: '10px',
+        control: '6px',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+        sans: ['var(--font-sans)', 'system-ui', '-apple-system', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
     },
   },

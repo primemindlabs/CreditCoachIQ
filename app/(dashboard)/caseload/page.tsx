@@ -44,8 +44,6 @@ function initials(first: string, last: string): string {
   return `${first?.[0] ?? ''}${last?.[0] ?? ''}`.toUpperCase();
 }
 
-const AVATAR_GRADIENTS = ['bg-gradient-money', 'bg-gradient-iris', 'bg-gradient-dark'];
-
 export default function CaseloadPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
@@ -126,11 +124,11 @@ export default function CaseloadPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map((c, i) => (
+              {filtered.map((c) => (
                 <tr key={c.id} className="border-b border-line last:border-0 hover:bg-paper">
                   <td className="px-6 py-4">
                     <Link href={`/caseload/${c.id}`} className="flex items-center gap-3 font-medium text-ink hover:underline">
-                      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[11px] font-medium text-white ${AVATAR_GRADIENTS[i % AVATAR_GRADIENTS.length]}`}>
+                      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control border border-line bg-paper text-[11px] font-medium text-ink">
                         {initials(c.first_name, c.last_name)}
                       </span>
                       {c.first_name} {c.last_name}
@@ -138,12 +136,12 @@ export default function CaseloadPage() {
                   </td>
                   <td className="px-6 py-4 text-muted">{c.plan_tier.replace('_', ' ')}</td>
                   <td className="px-6 py-4">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STAGE_STYLE[c.journey_stage] ?? 'bg-line text-muted'}`}>{STAGE_LABELS[c.journey_stage] ?? c.journey_stage}</span>
+                    <span className={`rounded-control px-2 py-1 text-xs font-medium ${STAGE_STYLE[c.journey_stage] ?? 'bg-line text-muted'}`}>{STAGE_LABELS[c.journey_stage] ?? c.journey_stage}</span>
                   </td>
-                  <td className="px-6 py-4 text-muted">{c.daysInStage}</td>
+                  <td className="figure px-6 py-4 text-muted">{c.daysInStage}</td>
                   <td className="px-6 py-4">
                     {c.risk?.level && c.risk.level !== 'low' ? (
-                      <span title={c.risk.reasons.join(', ')} className={`rounded-full px-2.5 py-1 text-xs font-medium ${RISK_STYLE[c.risk.level]}`}>
+                      <span title={c.risk.reasons.join(', ')} className={`rounded-control px-2 py-1 text-xs font-medium ${RISK_STYLE[c.risk.level]}`}>
                         {c.risk.level}
                       </span>
                     ) : (

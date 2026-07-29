@@ -8,48 +8,28 @@ interface StatCardProps {
   icon?: ReactNode;
 }
 
-const FILLED_CLASSES: Record<'money' | 'iris' | 'dark', string> = {
-  money: 'bg-gradient-money text-white shadow-glow-money',
-  iris: 'bg-gradient-iris text-white shadow-glow-iris',
-  dark: 'bg-gradient-dark text-white shadow-elevated',
+// v4: flat bordered tile, mono tabular value, accent expressed as a 2px
+// left rule instead of a gradient fill — see DESIGN_DIRECTION.md v4
+// addendum. "dark" accent (previously a filled near-black tile) is folded
+// into the plain case since there's no longer a filled-dark variant; it's
+// kept in the prop type so existing call sites don't need to change.
+const ACCENT_RULE: Record<'money' | 'iris' | 'gold', string> = {
+  money: 'border-l-money',
+  iris: 'border-l-iris',
+  gold: 'border-l-gold',
 };
 
-/** Gradient-accented stat tile — the richer-fintech alternative to a plain bordered card. */
 export default function StatCard({ label, value, sub, accent, icon }: StatCardProps) {
-  if (accent === 'gold') {
-    return (
-      <div className="rounded-card bg-gold-tint p-6">
-        <div className="flex items-start justify-between">
-          <p className="text-[13px] text-ink/60">{label}</p>
-          {icon && <span className="text-ink/50">{icon}</span>}
-        </div>
-        <p className="mt-2 text-[30px] font-medium leading-none text-ink">{value}</p>
-        {sub && <p className="mt-2 text-[13px] text-ink/60">{sub}</p>}
-      </div>
-    );
-  }
-
-  if (accent) {
-    return (
-      <div className={`rounded-card p-6 ${FILLED_CLASSES[accent]}`}>
-        <div className="flex items-start justify-between">
-          <p className="text-[13px] text-white/70">{label}</p>
-          {icon && <span className="text-white/70">{icon}</span>}
-        </div>
-        <p className="mt-2 text-[30px] font-medium leading-none">{value}</p>
-        {sub && <p className="mt-2 text-[13px] text-white/70">{sub}</p>}
-      </div>
-    );
-  }
+  const rule = accent && accent !== 'dark' ? ACCENT_RULE[accent] : 'border-l-line';
 
   return (
-    <div className="rounded-card border border-line bg-white p-6 shadow-card">
+    <div className={`rounded-card border border-line border-l-2 ${rule} bg-white p-5 shadow-card`}>
       <div className="flex items-start justify-between">
-        <p className="text-[13px] text-muted">{label}</p>
+        <p className="text-[12px] uppercase tracking-wide text-muted">{label}</p>
         {icon && <span className="text-muted">{icon}</span>}
       </div>
-      <p className="mt-2 text-[30px] font-medium leading-none text-ink">{value}</p>
-      {sub && <p className="mt-2 text-[13px] text-muted">{sub}</p>}
+      <p className="figure mt-2 text-[26px] font-medium leading-none text-ink">{value}</p>
+      {sub && <p className="mt-2 text-[12px] text-muted">{sub}</p>}
     </div>
   );
 }

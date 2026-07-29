@@ -30,6 +30,7 @@ export default function ReferralPartnersPage() {
   const [commissionValue, setCommissionValue] = useState('');
   const [payingId, setPayingId] = useState<string | null>(null);
   const [payAmount, setPayAmount] = useState('');
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -43,27 +44,47 @@ export default function ReferralPartnersPage() {
 
   async function createPartner() {
     if (!name.trim()) return;
-    await fetch('/api/referral-partners', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, partnerType, commissionType, commissionValue: commissionValue ? Number(commissionValue) : 0 }),
-    });
-    setName('');
-    setCommissionValue('');
-    setShowCreate(false);
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/referral-partners', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, partnerType, commissionType, commissionValue: commissionValue ? Number(commissionValue) : 0 }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not save this partner (${res.status}).`);
+        return;
+      }
+      setName('');
+      setCommissionValue('');
+      setShowCreate(false);
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   async function recordPayment(partnerId: string) {
     if (!payAmount) return;
-    await fetch(`/api/referral-partners/${partnerId}/commission`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ eventType: 'commission_paid', amount: Number(payAmount) }),
-    });
-    setPayingId(null);
-    setPayAmount('');
-    load();
+    setError(null);
+    try {
+      const res = await fetch(`/api/referral-partners/${partnerId}/commission`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ eventType: 'commission_paid', amount: Number(payAmount) }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not record that payment (${res.status}).`);
+        return;
+      }
+      setPayingId(null);
+      setPayAmount('');
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    }
   }
 
   return (
@@ -77,6 +98,10 @@ export default function ReferralPartnersPage() {
           Add partner
         </button>
       </div>
+
+      {error && (
+        <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
+      )}
 
       {showCreate && (
         <div className="mb-8 rounded-card border border-line bg-white p-6">
