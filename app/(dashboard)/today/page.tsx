@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, Sparkles } from 'lucide-react';
+import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, Sparkles, UserPlus } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
 
 interface BorrowerRef { first_name: string; last_name: string }
@@ -16,8 +16,10 @@ interface Today {
   tasks: TaskItem[];
   upcomingCalls: CallItem[];
   unreadMessages: MessageItem[];
+  unreadTexts: MessageItem[];
   openComplaints: ComplaintItem[];
   paymentFailures: PaymentItem[];
+  newLeadsCount: number;
   scoreJumps: { borrowerId: string; delta: number; name: string }[];
 }
 
@@ -60,7 +62,7 @@ export default function TodayPage() {
 
   const needsAttention = useMemo(() => {
     if (!data) return 0;
-    return data.tasks.length + data.unreadMessages.length + data.openComplaints.length + data.paymentFailures.length;
+    return data.tasks.length + data.unreadMessages.length + data.unreadTexts.length + data.openComplaints.length + data.paymentFailures.length;
   }, [data]);
 
   if (loading || !data) {
@@ -84,11 +86,14 @@ export default function TodayPage() {
         </p>
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-4">
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-5">
         <StatCard label="Open tasks" value={data.tasks.length} accent={data.tasks.length > 0 ? 'iris' : undefined} icon={<CheckSquare size={16} strokeWidth={1.75} />} />
         <StatCard label="Calls this week" value={data.upcomingCalls.length} icon={<Phone size={16} strokeWidth={1.75} />} />
-        <StatCard label="Unread messages" value={data.unreadMessages.length} accent={data.unreadMessages.length > 0 ? 'gold' : undefined} icon={<MessageCircle size={16} strokeWidth={1.75} />} />
+        <StatCard label="Unread messages" value={data.unreadMessages.length + data.unreadTexts.length} accent={(data.unreadMessages.length + data.unreadTexts.length) > 0 ? 'gold' : undefined} icon={<MessageCircle size={16} strokeWidth={1.75} />} />
         <StatCard label="Needs review" value={data.openComplaints.length + data.paymentFailures.length} accent={(data.openComplaints.length + data.paymentFailures.length) > 0 ? 'money' : undefined} icon={<AlertTriangle size={16} strokeWidth={1.75} />} />
+        <Link href="/leads" className="block transition-opacity hover:opacity-90">
+          <StatCard label="New leads" value={data.newLeadsCount} accent={data.newLeadsCount > 0 ? 'iris' : undefined} icon={<UserPlus size={16} strokeWidth={1.75} />} />
+        </Link>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -125,11 +130,17 @@ export default function TodayPage() {
 
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-4 text-sm font-medium text-ink">Unread messages</p>
-          {data.unreadMessages.length === 0 ? <p className="text-sm text-muted">All caught up.</p> : (
+          {data.unreadMessages.length === 0 && data.unreadTexts.length === 0 ? <p className="text-sm text-muted">All caught up.</p> : (
             <div className="space-y-3">
               {data.unreadMessages.map((m) => (
                 <Link key={m.id} href={`/caseload/${m.borrower_id}`} className="block border-b border-line pb-3 text-sm last:border-0 last:pb-0 hover:text-money">
-                  <p className="text-ink">{name(m.borrowers)}</p>
+                  <p className="text-ink">{name(m.borrowers)} <span className="text-xs text-muted">· portal</span></p>
+                  <p className="mt-0.5 truncate text-muted">{m.body}</p>
+                </Link>
+              ))}
+              {data.unreadTexts.map((m) => (
+                <Link key={m.id} href={`/caseload/${m.borrower_id}`} className="block border-b border-line pb-3 text-sm last:border-0 last:pb-0 hover:text-money">
+                  <p className="text-ink">{name(m.borrowers)} <span className="text-xs text-muted">· text</span></p>
                   <p className="mt-0.5 truncate text-muted">{m.body}</p>
                 </Link>
               ))}

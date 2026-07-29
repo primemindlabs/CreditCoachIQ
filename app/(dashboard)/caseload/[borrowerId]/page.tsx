@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Phone, RefreshCw, ShieldOff, Sparkles } from 'lucide-react';
+import { Phone, RefreshCw, ShieldOff, Sparkles, MessageSquare, UserCheck } from 'lucide-react';
 import RadialScore from '@/components/ui/RadialScore';
 import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
@@ -10,6 +10,7 @@ interface ClientDetail {
   borrower: {
     id: string; first_name: string; last_name: string; email: string | null; phone: string | null;
     plan_tier: string; journey_stage: string; state: string | null; funding_status: string | null;
+    lead_status: string; interest_level: string | null;
   };
   enrollment: {
     id: string; status: string; target_score: number; current_score_exp: number | null; current_score_eqx: number | null; current_score_tu: number | null;
@@ -17,13 +18,14 @@ interface ClientDetail {
   } | null;
   goals: { id: string; title: string; target_amount: number | null; current_amount: number | null; status: string }[];
   openTasks: { id: string; type: string; title: string; due_date: string | null }[];
-  recentCalls: { id: string; status: string; duration_seconds: number | null; started_at: string }[];
+  recentCalls: { id: string; status: string; duration_seconds: number | null; started_at: string; notes: string | null }[];
   referralPartnerName: string | null;
   scoreHistory: { date: string; score: number }[];
 }
 
 interface StackSummary { capitalAvailable: number; activeApplicationCount: number; expiringWithin30Days: { lender_name: string }[]; }
 interface Dispute { id: string; bureau: string; letter_body: string; sent_at: string | null; response_status: string; credit_tradelines: { creditor_name: string } | null; }
+interface SmsMessage { id: string; direction: 'inbound' | 'outbound'; body: string; status: string; created_at: string; }
 interface BillingInfo {
   configured: boolean;
   subscriptionStatus: string | null;
@@ -51,19 +53,28 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   const [portalMsg, setPortalMsg] = useState<string | null>(null);
   const [callBrief, setCallBrief] = useState<string | null>(null);
   const [callBriefLoading, setCallBriefLoading] = useState(false);
+  const [selectedDisputeIds, setSelectedDisputeIds] = useState<Set<string>>(new Set());
+  const [bulkSending, setBulkSending] = useState(false);
+  const [smsMessages, setSmsMessages] = useState<SmsMessage[]>([]);
+  const [smsDraft, setSmsDraft] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [callNoteDrafts, setCallNoteDrafts] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
     const detail = await fetch(`/api/coach/client/${borrowerId}`).then((r) => r.json());
     setData(detail);
-    const [disputesRes, stackData, billingData] = await Promise.all([
+    const [disputesRes, stackData, billingData, smsData] = await Promise.all([
       detail.enrollment ? fetch(`/api/disputes?enrollment_id=${detail.enrollment.id}`).then((r) => r.json()) : Promise.resolve({ disputes: [] }),
       fetch(`/api/stacking/summary?borrower_id=${borrowerId}`).then((r) => r.json()),
       fetch(`/api/billing/invoices?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : null)),
+      fetch(`/api/coach/sms?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] })),
     ]);
     setDisputes(disputesRes.disputes ?? []);
     setStack(stackData);
     setBilling(billingData);
+    setSmsMessages(smsData.messages ?? []);
     setLoading(false);
   }, [borrowerId]);
 
@@ -123,6 +134,61 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
     load();
   }
 
+  function toggleDisputeSelect(id: string) {
+    setSelectedDisputeIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  async function sendSelectedDisputes() {
+    if (selectedDisputeIds.size === 0) return;
+    setBulkSending(true);
+    await fetch('/api/disputes/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disputeIds: Array.from(selectedDisputeIds) }),
+    });
+    setSelectedDisputeIds(new Set());
+    setBulkSending(false);
+    load();
+  }
+
+  async function sendSmsMessage() {
+    if (!smsDraft.trim()) return;
+    setSmsSending(true);
+    const res = await fetch('/api/coach/sms', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ borrowerId, body: smsDraft.trim() }),
+    });
+    if (res.ok) setSmsDraft('');
+    setSmsSending(false);
+    const thread = await fetch(`/api/coach/sms?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] }));
+    setSmsMessages(thread.messages ?? []);
+  }
+
+  async function saveCallNotes(logId: string) {
+    if (!(logId in callNoteDrafts)) return; // untouched — don't overwrite on a stray blur
+    const notes = callNoteDrafts[logId];
+    await fetch('/api/coach/dialer', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ logId, notes }),
+    });
+    load();
+  }
+
+  async function convertLead() {
+    setConverting(true);
+    const res = await fetch(`/api/leads/${borrowerId}/convert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    const d = await res.json();
+    setConverting(false);
+    setPortalMsg(res.ok ? 'Converted to enrolled client.' : (d.error ?? 'Could not convert.'));
+    load();
+  }
+
   if (loading || !data) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -145,9 +211,13 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
               {borrower.email ?? 'No email'} · {borrower.phone ?? 'No phone'} · {borrower.plan_tier.replace('_', ' ')}
               {data.referralPartnerName ? ` · Referred by ${data.referralPartnerName}` : ''}
             </p>
-            <p className={`mt-3 text-xs ${enrollment?.croa_disclosure_signed_at ? 'text-money' : 'text-gold'}`}>
-              {enrollment?.croa_disclosure_signed_at ? 'CROA signed' : 'CROA not yet signed'}
-            </p>
+            {enrollment ? (
+              <p className={`mt-3 text-xs ${enrollment?.croa_disclosure_signed_at ? 'text-money' : 'text-gold'}`}>
+                {enrollment?.croa_disclosure_signed_at ? 'CROA signed' : 'CROA not yet signed'}
+              </p>
+            ) : (
+              <p className="mt-3 text-xs text-gold">Lead · {borrower.lead_status}{borrower.interest_level ? ` · ${borrower.interest_level}` : ''} — not yet enrolled</p>
+            )}
             {scoreValues.length >= 2 && (
               <div className="mt-6">
                 <p className="mb-2 text-[11px] uppercase tracking-wide text-white/40">Score trend</p>
@@ -167,6 +237,11 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
               <button onClick={loadCallBrief} disabled={callBriefLoading} className="flex items-center gap-1.5 rounded-control bg-gradient-iris px-4 py-2.5 text-sm font-medium text-white shadow-glow-iris disabled:opacity-60">
                 <Sparkles size={14} strokeWidth={1.75} /> {callBriefLoading ? 'Writing…' : 'Call prep brief'}
               </button>
+              {!enrollment && (
+                <button onClick={convertLead} disabled={converting} className="flex items-center gap-1.5 rounded-control bg-gold px-4 py-2.5 text-sm font-medium text-ink shadow-card disabled:opacity-60">
+                  <UserCheck size={14} strokeWidth={1.75} /> {converting ? 'Converting…' : 'Convert to client'}
+                </button>
+              )}
             </div>
             {callBrief && (
               <div className="mt-4 max-w-xl rounded-control bg-white/10 p-4 text-sm text-white/90">{callBrief}</div>
@@ -201,14 +276,26 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
 
       {enrollment && (
         <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
-          <p className="mb-4 text-sm font-medium text-ink">Dispute letters</p>
+          <div className="mb-4 flex items-center justify-between">
+            <p className="text-sm font-medium text-ink">Dispute letters</p>
+            {selectedDisputeIds.size > 0 && (
+              <button onClick={sendSelectedDisputes} disabled={bulkSending} className="rounded-control bg-money px-3 py-1.5 text-xs font-medium text-white hover:bg-money-hover disabled:opacity-50">
+                {bulkSending ? 'Sending…' : `Send ${selectedDisputeIds.size} selected`}
+              </button>
+            )}
+          </div>
           {disputes.length === 0 ? (
             <p className="text-sm text-muted">No disputes drafted yet.</p>
           ) : (
             <div className="space-y-3">
               {disputes.map((d) => (
                 <div key={d.id} className="flex items-center justify-between border-b border-line pb-3 text-sm last:border-0 last:pb-0">
-                  <span className="text-ink">{d.credit_tradelines?.creditor_name ?? 'Account'} · {d.bureau}</span>
+                  <span className="flex items-center gap-2 text-ink">
+                    {!d.sent_at && (
+                      <input type="checkbox" checked={selectedDisputeIds.has(d.id)} onChange={() => toggleDisputeSelect(d.id)} />
+                    )}
+                    {d.credit_tradelines?.creditor_name ?? 'Account'} · {d.bureau}
+                  </span>
                   {d.sent_at ? (
                     <span className="text-muted">{d.response_status}</span>
                   ) : (
@@ -281,19 +368,65 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         </div>
       </div>
 
-      {data.recentCalls.length > 0 && (
-        <div className="mt-8 rounded-card border border-line bg-white p-6 shadow-card">
-          <p className="mb-3 text-sm font-medium text-ink">Recent calls</p>
-          <div className="space-y-2">
-            {data.recentCalls.map((c) => (
-              <div key={c.id} className="flex justify-between text-sm">
-                <span className="text-ink">{new Date(c.started_at).toLocaleString()}</span>
-                <span className="text-muted">{c.status}{c.duration_seconds ? ` · ${Math.round(c.duration_seconds / 60)}m` : ''}</span>
-              </div>
-            ))}
+      <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        {data.recentCalls.length > 0 && (
+          <div className="rounded-card border border-line bg-white p-6 shadow-card">
+            <p className="mb-3 text-sm font-medium text-ink">Recent calls</p>
+            <div className="space-y-3">
+              {data.recentCalls.map((c) => (
+                <div key={c.id} className="border-b border-line pb-3 text-sm last:border-0 last:pb-0">
+                  <div className="flex justify-between">
+                    <span className="text-ink">{new Date(c.started_at).toLocaleString()}</span>
+                    <span className="text-muted">{c.status}{c.duration_seconds ? ` · ${Math.round(c.duration_seconds / 60)}m` : ''}</span>
+                  </div>
+                  <textarea
+                    placeholder="Add call notes…"
+                    defaultValue={c.notes ?? ''}
+                    onChange={(e) => setCallNoteDrafts((prev) => ({ ...prev, [c.id]: e.target.value }))}
+                    onBlur={() => saveCallNotes(c.id)}
+                    rows={2}
+                    className="mt-2 w-full rounded-control border border-line px-2 py-1.5 text-xs text-ink placeholder:text-muted focus:border-ink/30 focus:outline-none"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
+        )}
+
+        <div className="rounded-card border border-line bg-white p-6 shadow-card">
+          <p className="mb-3 flex items-center gap-1.5 text-sm font-medium text-ink"><MessageSquare size={14} strokeWidth={1.75} /> Text messages</p>
+          {!borrower.phone ? (
+            <p className="text-sm text-muted">No phone number on file.</p>
+          ) : (
+            <>
+              <div className="max-h-64 space-y-2 overflow-y-auto">
+                {smsMessages.length === 0 ? (
+                  <p className="text-sm text-muted">No texts yet.</p>
+                ) : (
+                  smsMessages.map((m) => (
+                    <div key={m.id} className={`max-w-[85%] rounded-control px-3 py-2 text-sm ${m.direction === 'outbound' ? 'ml-auto bg-money-tint text-ink' : 'bg-paper text-ink'}`}>
+                      <p>{m.body}</p>
+                      <p className="mt-1 text-[10px] text-muted">{new Date(m.created_at).toLocaleString()}</p>
+                    </div>
+                  ))
+                )}
+              </div>
+              <div className="mt-3 flex gap-2">
+                <input
+                  value={smsDraft}
+                  onChange={(e) => setSmsDraft(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') sendSmsMessage(); }}
+                  placeholder="Text this client…"
+                  className="flex-1 rounded-control border border-line px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-ink/30 focus:outline-none"
+                />
+                <button onClick={sendSmsMessage} disabled={smsSending || !smsDraft.trim()} className="rounded-control bg-money px-3 py-2 text-xs font-medium text-white hover:bg-money-hover disabled:opacity-50">
+                  {smsSending ? 'Sending…' : 'Send'}
+                </button>
+              </div>
+            </>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

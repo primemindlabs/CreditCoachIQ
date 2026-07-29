@@ -1126,3 +1126,58 @@ REVOKE UPDATE, DELETE, TRUNCATE ON referral_commission_events FROM PUBLIC, authe
 DROP TRIGGER IF EXISTS trg_referral_partners_updated_at ON referral_partners;
 CREATE TRIGGER trg_referral_partners_updated_at BEFORE UPDATE ON referral_partners
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================================
+-- 0013_leads_sms_call_notes.sql
+-- ============================================================================
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS lead_status text NOT NULL DEFAULT 'converted'
+  CHECK (lead_status IN ('new', 'contacted', 'qualified', 'converted', 'lost'));
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS interest_level text
+  CHECK (interest_level IN ('hot', 'warm', 'cold'));
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS lead_source text NOT NULL DEFAULT 'manual';
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS last_contacted_at timestamptz;
+
+UPDATE borrowers b SET lead_status = 'converted'
+WHERE lead_status = 'new'
+  AND EXISTS (SELECT 1 FROM credit_repair_enrollments e WHERE e.borrower_id = b.id);
+
+CREATE INDEX IF NOT EXISTS idx_borrowers_lead_status ON borrowers(org_id, lead_status) WHERE lead_status != 'converted';
+
+CREATE TABLE IF NOT EXISTS lead_activity_log (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id        uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  borrower_id   uuid NOT NULL REFERENCES borrowers(id) ON DELETE CASCADE,
+  actor_id      uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  type          text NOT NULL CHECK (type IN ('call', 'sms', 'email', 'note', 'status_change')),
+  body          text,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_lead_activity_borrower ON lead_activity_log(org_id, borrower_id, created_at DESC);
+ALTER TABLE lead_activity_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "lead_activity_select" ON lead_activity_log FOR SELECT USING (org_id = public.get_org_id());
+CREATE POLICY "lead_activity_insert" ON lead_activity_log FOR INSERT WITH CHECK (org_id = public.get_org_id());
+REVOKE UPDATE, DELETE, TRUNCATE ON lead_activity_log FROM PUBLIC, authenticated, service_role, anon;
+
+CREATE TABLE IF NOT EXISTS sms_messages (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id        uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  borrower_id   uuid NOT NULL REFERENCES borrowers(id) ON DELETE CASCADE,
+  direction     text NOT NULL CHECK (direction IN ('inbound', 'outbound')),
+  body          text NOT NULL,
+  to_number     text NOT NULL,
+  from_number   text NOT NULL,
+  twilio_sid    text UNIQUE,
+  status        text NOT NULL DEFAULT 'received' CHECK (status IN ('queued', 'sent', 'delivered', 'failed', 'received')),
+  sent_by       uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  read_at       timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sms_messages_thread ON sms_messages(org_id, borrower_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_sms_messages_sid ON sms_messages(twilio_sid);
+CREATE INDEX IF NOT EXISTS idx_sms_messages_unread ON sms_messages(org_id, borrower_id) WHERE direction = 'inbound' AND read_at IS NULL;
+ALTER TABLE sms_messages ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "sms_messages_org" ON sms_messages FOR ALL
+  USING (org_id = public.get_org_id()) WITH CHECK (org_id = public.get_org_id());
+CREATE POLICY "sms_messages_service_all" ON sms_messages FOR ALL USING (true) WITH CHECK (true);
+
+ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS notes text;

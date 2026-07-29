@@ -13,11 +13,11 @@ export async function GET(_req: Request, { params }: { params: { borrowerId: str
 
   const sb = createAdminClient();
   const [{ data: borrower }, { data: enrollment }, { data: goals }, { data: tasks }, { data: recentCalls }] = await Promise.all([
-    sb.from('borrowers').select('id, first_name, last_name, email, phone, plan_tier, journey_stage, journey_stage_updated_at, state, funding_status, assigned_agent_id, referred_by_partner_id').eq('id', params.borrowerId).eq('org_id', orgId).maybeSingle(),
+    sb.from('borrowers').select('id, first_name, last_name, email, phone, plan_tier, journey_stage, journey_stage_updated_at, state, funding_status, assigned_agent_id, referred_by_partner_id, lead_status, interest_level').eq('id', params.borrowerId).eq('org_id', orgId).maybeSingle(),
     sb.from('credit_repair_enrollments').select('id, status, target_score, current_score_exp, current_score_eqx, current_score_tu, croa_disclosure_signed_at, mortgage_ready_at').eq('borrower_id', params.borrowerId).eq('org_id', orgId).maybeSingle(),
     sb.from('financial_goals').select('id, title, target_amount, current_amount, status').eq('borrower_id', params.borrowerId).eq('org_id', orgId).order('created_at', { ascending: false }).limit(5),
     sb.from('coach_tasks').select('id, type, title, due_date, completed_at').eq('borrower_id', params.borrowerId).eq('org_id', orgId).is('completed_at', null).order('due_date', { ascending: true }).limit(10),
-    sb.from('call_logs').select('id, status, duration_seconds, started_at').eq('borrower_id', params.borrowerId).eq('org_id', orgId).order('started_at', { ascending: false }).limit(5),
+    sb.from('call_logs').select('id, status, duration_seconds, started_at, notes').eq('borrower_id', params.borrowerId).eq('org_id', orgId).order('started_at', { ascending: false }).limit(5),
   ]);
 
   if (!borrower) return NextResponse.json({ error: 'Not found' }, { status: 404 });

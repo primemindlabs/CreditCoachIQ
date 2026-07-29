@@ -20,7 +20,8 @@ export async function GET(req: Request) {
   let query = sb
     .from('borrowers')
     .select('id, first_name, last_name, plan_tier, journey_stage, journey_stage_updated_at, assigned_agent_id')
-    .eq('org_id', orgId);
+    .eq('org_id', orgId)
+    .eq('lead_status', 'converted'); // leads live on /leads until converted — see migration 0013
   if (scopeToSelf && profile?.id) query = query.eq('assigned_agent_id', profile.id);
 
   const { data: borrowers, error } = await query.order('journey_stage_updated_at', { ascending: true });

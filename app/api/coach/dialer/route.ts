@@ -15,7 +15,7 @@ export async function GET(req: Request) {
   const sb = createAdminClient();
   const { data: calls, error } = await sb
     .from('call_logs')
-    .select('id, status, to_number, duration_seconds, started_at, ended_at')
+    .select('id, status, to_number, duration_seconds, started_at, ended_at, notes')
     .eq('org_id', orgId)
     .eq('borrower_id', borrowerId)
     .order('started_at', { ascending: false })
@@ -23,6 +23,23 @@ export async function GET(req: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ calls: calls ?? [] });
+}
+
+// Post-call follow-up notes — the call itself is logged automatically via
+// the Twilio status webhook (app/api/telephony/status); notes are the one
+// piece a coach has to add by hand.
+export async function PATCH(req: Request) {
+  const { orgId } = await getOrgContext();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = (await req.json().catch(() => ({}))) as { logId?: string; notes?: string };
+  if (!body.logId) return NextResponse.json({ error: 'logId required' }, { status: 400 });
+
+  const sb = createAdminClient();
+  const { error } = await sb.from('call_logs').update({ notes: body.notes ?? null }).eq('id', body.logId).eq('org_id', orgId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 }
 
 export async function POST(req: Request) {

@@ -14,6 +14,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const isCoach = role === 'coach';
   const canDisputes = hasPermission(role, 'manage_disputes'); // admin, coach, processor
   const canComplaints = hasPermission(role, 'manage_complaints'); // admin, coach, processor
+  const canIntake = hasPermission(role, 'manage_intake'); // admin, coach, sales
 
   return (
     <div className="min-h-screen bg-paper">
@@ -25,6 +26,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           </Link>
           <nav className="flex items-center gap-1 text-sm text-muted">
             <Link href="/today" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Today</Link>
+            {canIntake && <Link href="/leads" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Leads</Link>}
             <Link href="/caseload" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Caseload</Link>
             {canDisputes && <Link href="/credit-reports" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Credit Reports</Link>}
             {(isAdmin || isCoach) && <Link href="/referral-partners" className="rounded-full px-3 py-1.5 hover:bg-line/60 hover:text-ink">Referrals</Link>}

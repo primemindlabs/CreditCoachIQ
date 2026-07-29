@@ -23,7 +23,7 @@ export async function GET() {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-  const [tasksRes, callsRes, messagesRes, complaintsRes, paymentsRes, uploadsRes] = await Promise.all([
+  const [tasksRes, callsRes, messagesRes, smsRes, complaintsRes, paymentsRes, newLeadsRes, uploadsRes] = await Promise.all([
     sb.from('coach_tasks')
       .select('id, type, title, due_date, borrower_id, borrowers(first_name, last_name)')
       .eq('org_id', orgId)
@@ -46,6 +46,13 @@ export async function GET() {
       .is('read_at', null)
       .order('created_at', { ascending: false })
       .limit(10),
+    sb.from('sms_messages')
+      .select('id, borrower_id, body, created_at, borrowers(first_name, last_name)')
+      .eq('org_id', orgId)
+      .eq('direction', 'inbound')
+      .is('read_at', null)
+      .order('created_at', { ascending: false })
+      .limit(10),
     sb.from('complaint_log')
       .select('id, borrower_id, category, status, opened_at, borrowers(first_name, last_name)')
       .eq('org_id', orgId)
@@ -58,6 +65,10 @@ export async function GET() {
       .not('last_payment_failed_at', 'is', null)
       .order('last_payment_failed_at', { ascending: false })
       .limit(10),
+    sb.from('borrowers')
+      .select('id', { count: 'exact', head: true })
+      .eq('org_id', orgId)
+      .eq('lead_status', 'new'),
     // Score-jump detection — real deltas from actual report uploads, not
     // estimated. Grouped/compared in JS below since this needs "the last
     // two uploads per enrollment," not a simple filter.
@@ -101,8 +112,10 @@ export async function GET() {
     tasks: tasksRes.data ?? [],
     upcomingCalls: callsRes.data ?? [],
     unreadMessages: messagesRes.data ?? [],
+    unreadTexts: smsRes.data ?? [],
     openComplaints: complaintsRes.data ?? [],
     paymentFailures: paymentsRes.data ?? [],
+    newLeadsCount: newLeadsRes.count ?? 0,
     scoreJumps,
   });
 }
