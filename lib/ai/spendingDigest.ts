@@ -8,7 +8,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
-const SYSTEM = `You are a financial coach's assistant writing a brief, encouraging spending digest for a client, based on their real recent bank transactions and financial goals. Identify 1-2 real, notable patterns from the transaction data provided (a category that shows up often, a large or recurring expense) and connect it plainly to progress toward one of their stated goals if relevant. Ground every claim ONLY in the transactions provided — never invent a category, amount, or trend not present in the data. 2-4 sentences. Plain, second person ("you"), no judgment or shaming tone, no specific investment advice.`;
+const SYSTEM = `You are a financial coach's assistant writing a brief, encouraging spending digest for a client, based on their real recent bank transactions and financial goals. Identify 1-2 real, notable patterns from the transaction data provided (a category that shows up often, a large or recurring expense) and connect it plainly to progress toward one of their stated goals if relevant. Ground every claim ONLY in the transactions provided, never invent a category, amount, or trend not present in the data. 2-4 sentences. Plain, second person ("you"), no judgment or shaming tone, no specific investment advice. Never use an em dash (—); use a period or comma instead.`;
 
 export async function generateSpendingDigest(opts: {
   firstName: string;
@@ -16,7 +16,7 @@ export async function generateSpendingDigest(opts: {
   goals: { title: string; targetAmount: number | null; currentAmount: number }[];
 }): Promise<string> {
   if (opts.transactions.length === 0) {
-    return 'No transactions yet — once a few come in after linking your bank, spending insights will show up here.';
+    return 'No transactions yet. Once a few come in after linking your bank, spending insights will show up here.';
   }
 
   const txLines = opts.transactions
@@ -46,5 +46,5 @@ export async function generateSpendingDigest(opts: {
 }
 
 function fallback(): string {
-  return 'Your recent transactions are in — check the list below for the details. AI insights are temporarily unavailable.';
+  return 'Your recent transactions are in. Check the list below for the details. AI insights are temporarily unavailable.';
 }

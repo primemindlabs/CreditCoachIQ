@@ -19,7 +19,9 @@ You may ONLY use these personalization tokens, written exactly as shown: ${VALID
 For email: output the subject line first, prefixed exactly "Subject: ", then a blank line, then the body.
 For SMS: output only the body, no subject, and keep it under 320 characters.
 
-Warm, encouraging, specific to credit coaching — not generic corporate marketing copy. If the purpose implies a marketing-style (non-transactional) message, include {{unsubscribe_url}} somewhere in the body.`;
+Warm, encouraging, specific to credit coaching, not generic corporate marketing copy. If the purpose implies a marketing-style (non-transactional) message, include {{unsubscribe_url}} somewhere in the body.
+
+Never use an em dash (—) anywhere in the copy. Use a period, comma, or "and" instead.`;
 
 export async function draftMessageCopy(opts: {
   purpose: string;
@@ -52,6 +54,6 @@ export async function draftMessageCopy(opts: {
 function fallback(channel: 'email' | 'sms'): { subject: string | null; body: string } {
   return {
     subject: channel === 'email' ? 'A quick update, {{first_name}}' : null,
-    body: 'Draft generation is temporarily unavailable — try again in a moment, or write this one by hand.',
+    body: 'Draft generation is temporarily unavailable. Try again in a moment, or write this one by hand.',
   };
 }

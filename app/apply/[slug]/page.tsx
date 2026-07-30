@@ -83,7 +83,7 @@ export default function ApplyPage({ params }: { params: { slug: string } }) {
 
         {submitted ? (
           <div className="py-6 text-center">
-            <p className="text-[17px] font-medium text-ink">Thanks — we&apos;ve got it.</p>
+            <p className="text-[17px] font-medium text-ink">Thanks, we&apos;ve got it.</p>
             <p className="mt-2 text-sm text-muted">Someone from our team will reach out shortly.</p>
           </div>
         ) : (

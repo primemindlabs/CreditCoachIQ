@@ -8,7 +8,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
-const SYSTEM = `You are writing a short, warm, plain-English explanation for a credit-repair client about why their credit score changed. Ground your answer ONLY in the resolved dispute activity provided — do not speculate about causes not listed. If no dispute activity is provided, say the change likely reflects normal score movement (payment history, utilization, etc.) and that they can ask their coach for specifics. 2-3 sentences maximum. Encouraging but honest tone, second person ("you"), no financial or legal advice beyond credit-repair basics.`;
+const SYSTEM = `You are writing a short, warm, plain-English explanation for a credit-repair client about why their credit score changed. Ground your answer ONLY in the resolved dispute activity provided, do not speculate about causes not listed. If no dispute activity is provided, say the change likely reflects normal score movement (payment history, utilization, etc.) and that they can ask their coach for specifics. 2-3 sentences maximum. Encouraging but honest tone, second person ("you"), no financial or legal advice beyond credit-repair basics. Never use an em dash (—); use a period or comma instead.`;
 
 export async function explainScoreChange(opts: {
   firstName: string;
@@ -42,6 +42,6 @@ export async function explainScoreChange(opts: {
 
 function fallback(direction: string, disputeCount: number): string {
   return disputeCount > 0
-    ? `Your score ${direction} — ${disputeCount} resolved dispute${disputeCount === 1 ? '' : 's'} likely contributed. Ask your coach for the specifics.`
-    : `Your score ${direction}. This can reflect normal factors like payment history or utilization — ask your coach if you'd like the specifics.`;
+    ? `Your score ${direction}. ${disputeCount} resolved dispute${disputeCount === 1 ? '' : 's'} likely contributed. Ask your coach for the specifics.`
+    : `Your score ${direction}. This can reflect normal factors like payment history or utilization. Ask your coach if you'd like the specifics.`;
 }

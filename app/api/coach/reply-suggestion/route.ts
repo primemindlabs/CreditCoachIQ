@@ -28,6 +28,6 @@ export const POST = withErrorHandling(async function POST(req: Request) {
     thread: body.thread,
   });
 
-  if (!draft) return NextResponse.json({ error: 'Could not generate a suggestion right now — try writing it yourself.' }, { status: 502 });
+  if (!draft) return NextResponse.json({ error: 'Could not generate a suggestion right now. Try writing it yourself.' }, { status: 502 });
   return NextResponse.json({ draft });
 });

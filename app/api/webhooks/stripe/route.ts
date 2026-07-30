@@ -73,7 +73,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           const wasFirstFailure = (enrollment.payment_retry_count as number ?? 0) === 0;
           await sb.from('credit_repair_enrollments').update({
             last_payment_failed_at: new Date().toISOString(),
-            last_payment_failure_reason: 'Stripe reported a failed payment attempt — see the Stripe dashboard for the decline reason.',
+            last_payment_failure_reason: 'Stripe reported a failed payment attempt. See the Stripe dashboard for the decline reason.',
             payment_retry_count: (enrollment.payment_retry_count as number ?? 0) + 1,
           }).eq('id', enrollment.id as string);
 
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                 assigned_to: (borrower.assigned_agent_id as string) ?? null,
                 source: 'system',
                 type: 'payment_failed',
-                title: 'Payment failed — client billing needs attention',
+                title: 'Payment failed, client billing needs attention',
               });
             }
           }

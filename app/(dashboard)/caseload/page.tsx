@@ -105,6 +105,9 @@ export default function ClientsPage() {
   const [bulkSmsDraft, setBulkSmsDraft] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkResult, setBulkResult] = useState<string | null>(null);
+  const [campaigns, setCampaigns] = useState<{ id: string; name: string }[]>([]);
+  const [campaignsLoaded, setCampaignsLoaded] = useState(false);
+  const [bulkCampaignId, setBulkCampaignId] = useState('');
 
   const load = useCallback(async (segment: Segment, all: boolean) => {
     setLoading(true);
@@ -342,6 +345,45 @@ export default function ClientsPage() {
     }
   }
 
+  async function loadCampaigns() {
+    if (campaignsLoaded) return;
+    try {
+      const res = await fetch('/api/campaigns');
+      if (res.ok) {
+        const d = await res.json();
+        setCampaigns((d.campaigns ?? []).map((c: { id: string; name: string }) => ({ id: c.id, name: c.name })));
+      }
+    } catch {
+      // Non-critical — the campaign dropdown just stays empty; the button surfaces a server error on submit.
+    } finally {
+      setCampaignsLoaded(true);
+    }
+  }
+
+  async function bulkAddToCampaign() {
+    if (selectedIds.size === 0 || !bulkCampaignId) return;
+    setBulkBusy(true);
+    setBulkResult(null);
+    try {
+      const res = await fetch(`/api/campaigns/${bulkCampaignId}/enroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrowerIds: Array.from(selectedIds) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setBulkResult(d.error ?? `Could not enroll (${res.status}).`);
+        return;
+      }
+      setBulkResult(`Enrolled ${d.enrolled} client${d.enrolled === 1 ? '' : 's'} in the campaign.`);
+      setSelectedIds(new Set());
+    } catch {
+      setBulkResult('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
   async function bulkSendSms() {
     if (selectedIds.size === 0 || !bulkSmsDraft.trim()) return;
     setBulkBusy(true);
@@ -376,7 +418,7 @@ export default function ClientsPage() {
       <div className="mb-6 flex items-end justify-between">
         <div>
           <h1 className="text-[26px] font-medium text-ink">Clients</h1>
-          <p className="mt-1 text-sm text-muted">Everyone in the pipeline — prospect to funded — in one place.</p>
+          <p className="mt-1 text-sm text-muted">Everyone in the pipeline, prospect to funded, in one place.</p>
         </div>
         <div className="flex items-center gap-3">
           {canSeeAll && (
@@ -602,6 +644,20 @@ export default function ClientsPage() {
             />
             <button onClick={bulkSendSms} disabled={bulkBusy || !bulkSmsDraft.trim()} className="shrink-0 rounded-control bg-ink px-3 py-1.5 text-sm font-medium text-white hover:bg-ink/90 disabled:opacity-60">
               Send
+            </button>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <select
+              value={bulkCampaignId}
+              onFocus={loadCampaigns}
+              onChange={(e) => setBulkCampaignId(e.target.value)}
+              className="rounded-control border border-line px-2.5 py-1.5 text-sm text-ink"
+            >
+              <option value="">Add to campaign…</option>
+              {campaigns.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            <button onClick={bulkAddToCampaign} disabled={bulkBusy || !bulkCampaignId} className="rounded-control border border-line px-3 py-1.5 text-sm text-ink hover:border-ink/30 disabled:opacity-60">
+              Enroll
             </button>
           </div>
           <button onClick={() => setSelectedIds(new Set())} className="text-sm text-muted hover:text-ink">Clear</button>

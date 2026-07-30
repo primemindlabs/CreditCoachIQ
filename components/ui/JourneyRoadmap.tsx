@@ -36,7 +36,7 @@ export default function JourneyRoadmap({ stage, busy, onChange }: JourneyRoadmap
         >
           {isPaused ? <Pause size={14} strokeWidth={1.75} /> : <X size={14} strokeWidth={1.75} />}
           <span className="font-medium">{isPaused ? 'Paused' : 'Exited'}</span>
-          <span className="text-muted">— pick a stage below to resume the roadmap.</span>
+          <span className="text-muted">Pick a stage below to resume the roadmap.</span>
         </div>
       )}
 

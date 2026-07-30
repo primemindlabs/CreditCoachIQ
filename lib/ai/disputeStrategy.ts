@@ -12,7 +12,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
-const SYSTEM = `You are a credit repair strategist writing a short internal note for a coach reviewing which tradelines to dispute for a client. Ground every sentence ONLY in the tradelines listed — never invent a creditor, balance, or reason not given. Recommend a sending order (highest-value / most legally solid disputes first), and call out anything worth flagging to the coach (e.g. two items likely from the same root cause, or a low-confidence flag worth a second look before sending). 3-5 sentences, plain text, no headers or bullets, coach-facing internal note not client-facing copy. No legal guarantees — dispute outcomes are never certain.`;
+const SYSTEM = `You are a credit repair strategist writing a short internal note for a coach reviewing which tradelines to dispute for a client. Ground every sentence ONLY in the tradelines listed, never invent a creditor, balance, or reason not given. Recommend a sending order (highest-value / most legally solid disputes first), and call out anything worth flagging to the coach (e.g. two items likely from the same root cause, or a low-confidence flag worth a second look before sending). 3-5 sentences, plain text, no headers or bullets, coach-facing internal note not client-facing copy. No legal guarantees, dispute outcomes are never certain. Never use an em dash (—); use a period or comma instead.`;
 
 interface TradelineInput {
   creditorName: string;
@@ -32,7 +32,7 @@ export async function generateDisputeStrategy(opts: {
     `Client: ${opts.firstName}`,
     `Disputable tradelines (${opts.tradelines.length}), in priority order as flagged:`,
     ...opts.tradelines.map((t, i) =>
-      `${i + 1}. ${t.creditorName} (${t.bureau}) — priority ${t.disputePriority ?? '?'}/10, est. score gain +${t.estimatedScoreGain ?? '?'}, reason: ${t.disputeReason ?? 'not specified'}`
+      `${i + 1}. ${t.creditorName} (${t.bureau}), priority ${t.disputePriority ?? '?'}/10, est. score gain +${t.estimatedScoreGain ?? '?'}, reason: ${t.disputeReason ?? 'not specified'}`
     ),
   ];
 
@@ -53,5 +53,5 @@ export async function generateDisputeStrategy(opts: {
 }
 
 function fallback(firstName: string, count: number): string {
-  return `${count} disputable item(s) flagged on ${firstName}'s report, sorted by priority below (AI summary unavailable — review each item's reason and estimated score gain directly).`;
+  return `${count} disputable item(s) flagged on ${firstName}'s report, sorted by priority below (AI summary unavailable, review each item's reason and estimated score gain directly).`;
 }

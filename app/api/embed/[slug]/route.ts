@@ -68,7 +68,7 @@ export const POST = withErrorHandling(async function POST(req: Request, { params
     lead_status: 'new',
     lead_referrer: referrer,
   });
-  if (error) return NextResponse.json({ error: 'Could not submit — try again shortly.' }, { status: 500 });
+  if (error) return NextResponse.json({ error: 'Could not submit. Try again shortly.' }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 });

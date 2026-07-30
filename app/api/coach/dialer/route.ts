@@ -51,7 +51,7 @@ export const POST = withErrorHandling(async function POST(req: Request) {
   if (!body.borrowerId) return NextResponse.json({ error: 'borrowerId required' }, { status: 400 });
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!baseUrl) return NextResponse.json({ error: 'NEXT_PUBLIC_APP_URL is not set — required so Twilio can reach the TwiML/status webhooks.' }, { status: 500 });
+  if (!baseUrl) return NextResponse.json({ error: 'NEXT_PUBLIC_APP_URL is not set. Required so Twilio can reach the TwiML/status webhooks.' }, { status: 500 });
 
   const sb = createAdminClient();
   const [{ data: coach }, { data: borrower }] = await Promise.all([

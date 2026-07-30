@@ -76,9 +76,9 @@ export function scoreQuizResponse(questions: QuizQuestion[], answers: QuizAnswer
   }
 
   const focusByTier: Record<PlanTier, string> = {
-    credit_coaching: 'Lead with credit repair fundamentals — dispute strategy and score-building timeline.',
-    wealth_coaching: 'Lead with budgeting/debt-payoff — client is focused on financial fundamentals, not investing yet.',
-    investor_path: 'Lead with the Investor Path — client is showing signals toward credit stacking and funding readiness.',
+    credit_coaching: 'Lead with credit repair fundamentals, dispute strategy and score-building timeline.',
+    wealth_coaching: 'Lead with budgeting/debt-payoff. Client is focused on financial fundamentals, not investing yet.',
+    investor_path: 'Lead with the Investor Path. Client is showing signals toward credit stacking and funding readiness.',
   };
 
   return {

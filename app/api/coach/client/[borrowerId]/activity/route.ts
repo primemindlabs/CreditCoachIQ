@@ -97,7 +97,7 @@ export const GET = withErrorHandling(async function GET(_req: Request, { params 
     items.push({
       id: `call-${c.id}`,
       type: 'call',
-      label: `${c.direction === 'inbound' ? 'Inbound' : 'Outbound'} call — ${c.status}${mins ? ` (${mins} min)` : ''}`,
+      label: `${c.direction === 'inbound' ? 'Inbound' : 'Outbound'} call, ${c.status}${mins ? ` (${mins} min)` : ''}`,
       detail: (c.notes as string) ?? null,
       actor: actorName(profile as { first_name?: string; last_name?: string } | null),
       createdAt: c.started_at as string,

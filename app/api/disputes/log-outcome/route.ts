@@ -60,7 +60,7 @@ export const POST = withErrorHandling(async function POST(req: Request) {
     }
   } else if (outcome === 'no_response') {
     autoGenerateFollowUp = true;
-    nextAction = 'No bureau response within 30 days. Under the FCRA they must remove unverified items — sending a follow-up.';
+    nextAction = 'No bureau response within 30 days. Under the FCRA they must remove unverified items, sending a follow-up.';
   } else {
     nextAction = 'Bureau response logged.';
   }

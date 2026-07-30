@@ -37,7 +37,7 @@ export const POST = withErrorHandling(async function POST(req: Request) {
 
   for (const dispute of disputes) {
     const send = await sendCertifiedLetter({
-      description: `Credit Dispute — ${dispute.bureau} — ${(dispute.borrower_name as string) ?? 'Account'}`,
+      description: `Credit Dispute, ${dispute.bureau}, ${(dispute.borrower_name as string) ?? 'Account'}`,
       borrowerName: dispute.borrower_name as string,
       borrowerAddress: dispute.borrower_address as string,
       bureauAddress: dispute.bureau_address as string,
@@ -74,7 +74,7 @@ export const POST = withErrorHandling(async function POST(req: Request) {
     if (enrollment?.borrower_id) {
       await sb.from('coach_tasks').insert({
         org_id: orgId, borrower_id: enrollment.borrower_id, assigned_to: profile?.id ?? null,
-        source: 'system', type: 'dispute_response_tracking', title: `${sentCount} dispute letter(s) mailed — track bureau response`,
+        source: 'system', type: 'dispute_response_tracking', title: `${sentCount} dispute letter(s) mailed, track bureau response`,
         due_date: new Date(Date.now() + 37 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
       });
     }

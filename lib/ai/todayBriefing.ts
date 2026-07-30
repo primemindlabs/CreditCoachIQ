@@ -7,7 +7,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
-const SYSTEM = `You are writing a one-paragraph morning briefing for a credit-repair coach, summarizing what needs their attention today. Ground every sentence ONLY in the counts and names provided — never invent a number or a client name not given. Prioritize by urgency: payment failures and complaints approaching escalation first, then calls and messages, then good news (score jumps) last as a positive note. 3-5 sentences, direct and practical, no headers or bullets, plain text. If everything is genuinely empty, say so briefly and positively.`;
+const SYSTEM = `You are writing a one-paragraph morning briefing for a credit-repair coach, summarizing what needs their attention today. Ground every sentence ONLY in the counts and names provided, never invent a number or a client name not given. Prioritize by urgency: payment failures and complaints approaching escalation first, then calls and messages, then good news (score jumps) last as a positive note. 3-5 sentences, direct and practical, no headers or bullets, plain text. If everything is genuinely empty, say so briefly and positively. Never use an em dash (—); use a period or comma instead.`;
 
 export async function generateTodayBriefing(opts: {
   openTaskCount: number;
@@ -19,7 +19,7 @@ export async function generateTodayBriefing(opts: {
 }): Promise<string> {
   const total = opts.openTaskCount + opts.upcomingCallCount + opts.unreadMessageCount + opts.openComplaints.length + opts.paymentFailures.length;
   if (total === 0 && opts.scoreJumps.length === 0) {
-    return "Nothing needs your attention right now — caseload's quiet.";
+    return "Nothing needs your attention right now, caseload's quiet.";
   }
 
   const lines = [
@@ -48,5 +48,5 @@ export async function generateTodayBriefing(opts: {
 }
 
 function fallback(total: number): string {
-  return `${total} item${total === 1 ? '' : 's'} need your attention today — see the sections below for details (AI summary temporarily unavailable).`;
+  return `${total} item${total === 1 ? '' : 's'} need your attention today. See the sections below for details (AI summary temporarily unavailable).`;
 }

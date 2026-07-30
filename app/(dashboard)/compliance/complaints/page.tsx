@@ -127,7 +127,7 @@ export default function ComplaintsPage() {
       <div className="mb-8 flex items-end justify-between">
         <div>
           <h1 className="text-[26px] font-medium text-ink">Complaint log</h1>
-          <p className="mt-1 text-sm text-muted">A durable record of any complaint or dispute-handling escalation — CROA-adjacent best practice.</p>
+          <p className="mt-1 text-sm text-muted">A durable record of any complaint or dispute-handling escalation, CROA-adjacent best practice.</p>
         </div>
         <button onClick={() => setShowForm((s) => !s)} className="rounded-control bg-ink px-3.5 py-2 text-sm font-medium text-white hover:bg-ink/90">
           {showForm ? 'Cancel' : 'Log a complaint'}

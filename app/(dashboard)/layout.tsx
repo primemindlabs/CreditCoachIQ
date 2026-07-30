@@ -12,7 +12,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const { role } = await getOrgContext();
   const isAdmin = role === 'admin';
   const isCoach = role === 'coach';
-  const canDisputes = hasPermission(role, 'manage_disputes'); // admin, coach, processor
   const canComplaints = hasPermission(role, 'manage_complaints'); // admin, coach, processor
 
   return (
@@ -26,8 +25,6 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <nav className="flex items-center gap-1 text-sm text-muted">
             <Link href="/today" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Today</Link>
             <Link href="/caseload" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Clients</Link>
-            {canDisputes && <Link href="/credit-reports" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Credit Reports</Link>}
-            {(isAdmin || isCoach) && <Link href="/stacking" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Credit Stacking</Link>}
             {(isAdmin || isCoach) && <Link href="/referral-partners" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Referrals</Link>}
             {canComplaints && <Link href="/compliance/complaints" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Complaints</Link>}
             {(isAdmin || isCoach) && <Link href="/campaigns" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Campaigns</Link>}

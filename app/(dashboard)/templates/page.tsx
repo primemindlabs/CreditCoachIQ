@@ -18,6 +18,12 @@ export default function TemplatesPage() {
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editSubject, setEditSubject] = useState('');
+  const [editBody, setEditBody] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const load = useCallback(async () => {
     setError(null);
     try {
@@ -60,6 +66,48 @@ export default function TemplatesPage() {
     setBody((b) => `${b}{{${token}}}`);
   }
 
+  function startEdit(t: Template) {
+    setEditingId(t.id);
+    setEditName(t.name);
+    setEditSubject(t.subject ?? '');
+    setEditBody(t.body);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditName('');
+    setEditSubject('');
+    setEditBody('');
+  }
+
+  function insertEditToken(token: string) {
+    setEditBody((b) => `${b}{{${token}}}`);
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editName.trim() || !editBody.trim()) return;
+    setSavingEdit(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/templates', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: editingId, name: editName.trim(), subject: editSubject.trim() || null, body: editBody }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not save these changes (${res.status}).`);
+        return;
+      }
+      cancelEdit();
+      load();
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setSavingEdit(false);
+    }
+  }
+
   async function draftWithAI() {
     if (!draftPurpose.trim() || drafting) return;
     setDrafting(true);
@@ -90,7 +138,7 @@ export default function TemplatesPage() {
       <div className="mb-10 flex items-end justify-between">
         <div>
           <h1 className="text-[26px] font-medium text-ink">Templates</h1>
-          <p className="mt-1 text-sm text-muted">Email and text templates campaign steps send from. Tokens fill in fresh per client at send time.</p>
+          <p className="mt-1 text-sm text-muted">Email and text templates campaign steps send from. Tokens fill in fresh per client at send time. Edit a template here and every campaign step using it picks up the change.</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="rounded-control bg-money px-5 py-3 text-sm font-medium text-white hover:bg-money-hover">New template</button>
       </div>
@@ -104,7 +152,7 @@ export default function TemplatesPage() {
           <div className="mb-4 flex flex-wrap gap-4">
             <div className="flex-1 min-w-[200px]">
               <label className="mb-1 block text-xs text-muted">Name</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-control border border-line px-3 py-2 text-sm" placeholder="Welcome — day 1" />
+              <input value={name} onChange={(e) => setName(e.target.value)} className="w-full rounded-control border border-line px-3 py-2 text-sm" placeholder="Welcome, day 1" />
             </div>
             <div>
               <label className="mb-1 block text-xs text-muted">Channel</label>
@@ -133,7 +181,7 @@ export default function TemplatesPage() {
                 {drafting ? 'Drafting…' : 'Draft'}
               </button>
             </div>
-            <p className="mt-1.5 text-[11px] text-muted">Fills in the subject/body below — review and edit before saving.</p>
+            <p className="mt-1.5 text-[11px] text-muted">Fills in the subject/body below. Review and edit before saving.</p>
           </div>
           <div className="mb-3">
             <label className="mb-1 block text-xs text-muted">Body</label>
@@ -154,12 +202,48 @@ export default function TemplatesPage() {
       <div className="space-y-3">
         {templates.map((t) => (
           <div key={t.id} className="rounded-card border border-line bg-white p-5">
-            <div className="mb-1 flex items-center justify-between">
-              <p className="text-sm font-medium text-ink">{t.name}</p>
-              <span className="rounded-full bg-line px-2.5 py-1 text-xs text-muted">{t.channel}</span>
-            </div>
-            {t.subject && <p className="mb-1 text-xs text-muted">{t.subject}</p>}
-            <p className="line-clamp-2 text-xs text-muted">{t.body}</p>
+            {editingId === t.id ? (
+              <div>
+                <div className="mb-3 flex flex-wrap gap-4">
+                  <div className="flex-1 min-w-[200px]">
+                    <label className="mb-1 block text-xs text-muted">Name</label>
+                    <input value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full rounded-control border border-line px-3 py-2 text-sm" />
+                  </div>
+                  <span className="mt-6 rounded-full bg-line px-2.5 py-1 text-xs text-muted">{t.channel}</span>
+                </div>
+                {t.channel === 'email' && (
+                  <div className="mb-3">
+                    <label className="mb-1 block text-xs text-muted">Subject</label>
+                    <input value={editSubject} onChange={(e) => setEditSubject(e.target.value)} className="w-full rounded-control border border-line px-3 py-2 text-sm" />
+                  </div>
+                )}
+                <div className="mb-3">
+                  <label className="mb-1 block text-xs text-muted">Body</label>
+                  <textarea value={editBody} onChange={(e) => setEditBody(e.target.value)} rows={5} className="w-full rounded-control border border-line px-3 py-2 text-sm" />
+                </div>
+                <div className="mb-4 flex flex-wrap gap-2">
+                  {TOKENS.map((tok) => (
+                    <button key={tok} onClick={() => insertEditToken(tok)} className="rounded-full border border-line px-3 py-1 text-xs text-muted hover:border-money hover:text-money">{'{{' + tok + '}}'}</button>
+                  ))}
+                </div>
+                <div className="flex gap-3">
+                  <button onClick={saveEdit} disabled={savingEdit || !editName.trim() || !editBody.trim()} className="rounded-control bg-money px-4 py-2 text-sm font-medium text-white hover:bg-money-hover disabled:opacity-50">
+                    {savingEdit ? 'Saving…' : 'Save changes'}
+                  </button>
+                  <button onClick={cancelEdit} className="rounded-control border border-line px-4 py-2 text-sm text-ink">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => startEdit(t)} className="w-full text-left">
+                <div className="mb-1 flex items-center justify-between">
+                  <p className="text-sm font-medium text-ink">{t.name}</p>
+                  <span className="rounded-full bg-line px-2.5 py-1 text-xs text-muted">{t.channel}</span>
+                </div>
+                {t.subject && <p className="mb-1 text-xs text-muted">{t.subject}</p>}
+                <p className="line-clamp-2 text-xs text-muted">{t.body}</p>
+                <p className="mt-2 text-xs text-money">Edit</p>
+              </button>
+            )}
           </div>
         ))}
         {templates.length === 0 && <p className="text-sm text-muted">No templates yet.</p>}

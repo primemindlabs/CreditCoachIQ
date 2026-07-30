@@ -32,7 +32,7 @@ export const POST = withErrorHandling(async function POST(req: Request) {
     .maybeSingle();
   if (!enrollment) return NextResponse.json({ error: 'Enrollment not found' }, { status: 404 });
   if (!enrollment.croa_disclosure_signed_at) {
-    return NextResponse.json({ error: 'CROA disclosure has not been signed for this client yet — dispute letters cannot be generated until it is.' }, { status: 403 });
+    return NextResponse.json({ error: 'CROA disclosure has not been signed for this client yet. Dispute letters cannot be generated until it is.' }, { status: 403 });
   }
 
   let query = sb

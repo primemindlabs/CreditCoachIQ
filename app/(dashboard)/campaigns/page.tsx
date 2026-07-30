@@ -84,7 +84,7 @@ export default function CampaignsPage() {
       <div className="mb-10 flex items-end justify-between">
         <div>
           <h1 className="text-[26px] font-medium text-ink">Campaigns</h1>
-          <p className="mt-1 text-sm text-muted">Automated email and text sequences — built once, personalized per client at send time.</p>
+          <p className="mt-1 text-sm text-muted">Automated email and text sequences, built once and personalized per client at send time.</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="rounded-control bg-money px-5 py-3 text-sm font-medium text-white hover:bg-money-hover">
           New campaign

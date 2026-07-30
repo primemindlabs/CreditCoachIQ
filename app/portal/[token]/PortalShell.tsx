@@ -162,7 +162,7 @@ export default function PortalShell({ token, children }: { token: string; childr
                 {sending ? 'Sending…' : 'Resend code'}
               </button>
               <p className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-muted">
-                <Lock size={11} strokeWidth={2} /> Encrypted end to end — this code confirms it's really you
+                <Lock size={11} strokeWidth={2} /> Encrypted end to end. This code confirms it's really you
               </p>
             </div>
           )}

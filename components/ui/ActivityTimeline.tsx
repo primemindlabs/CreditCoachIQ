@@ -37,7 +37,7 @@ export default function ActivityTimeline({ items, loading }: { items: ActivityIt
   if (loading) return <p className="text-sm text-muted">Loading…</p>;
 
   if (items.length === 0) {
-    return <p className="text-sm text-muted">No activity yet — calls, notes, and stage changes will show up here.</p>;
+    return <p className="text-sm text-muted">No activity yet. Calls, notes, and stage changes will show up here.</p>;
   }
 
   return (

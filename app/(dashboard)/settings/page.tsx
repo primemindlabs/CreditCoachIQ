@@ -60,8 +60,8 @@ export default function SettingsPage() {
     const calendarResult = params.get('calendar');
     if (calendarResult === 'connected') setCalendarMsg('Google Calendar connected.');
     else if (calendarResult === 'error') setCalendarMsg('Could not connect Google Calendar. Try again.');
-    else if (calendarResult === 'no_refresh_token') setCalendarMsg('Google didn’t return a refresh token — try disconnecting your CreditCoachIQ access at myaccount.google.com/permissions and reconnecting.');
-    else if (calendarResult === 'state_mismatch') setCalendarMsg('That connection attempt expired — try again.');
+    else if (calendarResult === 'no_refresh_token') setCalendarMsg('Google didn’t return a refresh token. Try disconnecting your CreditCoachIQ access at myaccount.google.com/permissions and reconnecting.');
+    else if (calendarResult === 'state_mismatch') setCalendarMsg('That connection attempt expired. Try again.');
     if (calendarResult) window.history.replaceState({}, '', window.location.pathname);
     loadCalendarStatus();
   }, []);
@@ -214,7 +214,7 @@ export default function SettingsPage() {
       <div className="mt-6 rounded-card border border-line bg-white p-6">
         <p className="mb-1 text-sm font-medium text-ink">Google Calendar</p>
         <p className="mb-4 text-xs text-muted">
-          Connect your own Google Calendar — confirmed portal bookings are added to it automatically, and today&apos;s events from it show up on your Today page.
+          Connect your own Google Calendar. Confirmed portal bookings are added to it automatically, and today&apos;s events from it show up on your Today page.
         </p>
         {calendarMsg && <p className="mb-3 text-xs text-ink">{calendarMsg}</p>}
         {calendarLoading ? (

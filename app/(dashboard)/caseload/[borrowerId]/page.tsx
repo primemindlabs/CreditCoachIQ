@@ -7,6 +7,8 @@ import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
 import JourneyRoadmap from '@/components/ui/JourneyRoadmap';
 import ActivityTimeline from '@/components/ui/ActivityTimeline';
+import CreditReportPanel from '@/components/credit-reports/CreditReportPanel';
+import ClientStackingPanel from '@/components/stacking/ClientStackingPanel';
 
 interface ClientDetail {
   borrower: {
@@ -218,7 +220,7 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       body: JSON.stringify({ borrowerId }),
     });
     const d = await res.json();
-    setCallStatus(res.ok ? 'Call placed — your phone should ring now.' : d.error);
+    setCallStatus(res.ok ? 'Call placed. Your phone should ring now.' : d.error);
   }
 
   async function changeStage(toStage: string) {
@@ -714,13 +716,13 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
                 {sigVerifyResult && (
                   <p className={`mt-1.5 text-xs ${sigVerifyResult.valid ? 'text-money' : 'text-terra'}`}>
                     {sigVerifyResult.valid
-                      ? `Integrity check passed — signed ${sigVerifyResult.signedAt ? new Date(sigVerifyResult.signedAt).toLocaleString() : ''} (${sigVerifyResult.method})`
-                      : `Integrity check failed — ${sigVerifyResult.reason}`}
+                      ? `Integrity check passed, signed ${sigVerifyResult.signedAt ? new Date(sigVerifyResult.signedAt).toLocaleString() : ''} (${sigVerifyResult.method})`
+                      : `Integrity check failed: ${sigVerifyResult.reason}`}
                   </p>
                 )}
               </div>
             ) : (
-              <p className="mt-3 text-xs text-gold">Lead · {borrower.lead_status}{borrower.interest_level ? ` · ${borrower.interest_level}` : ''} — not yet enrolled</p>
+              <p className="mt-3 text-xs text-gold">Lead · {borrower.lead_status}{borrower.interest_level ? ` · ${borrower.interest_level}` : ''}, not yet enrolled</p>
             )}
             {scoreValues.length >= 2 && (
               <div className="mt-6">
@@ -775,7 +777,7 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         <textarea
           value={notesDraft}
           onChange={(e) => setNotesDraft(e.target.value)}
-          placeholder="What's actually going on with this person — context that doesn't belong to any one call."
+          placeholder="What's actually going on with this person, context that doesn't belong to any one call."
           rows={3}
           className="w-full resize-y rounded-control border border-line px-3 py-2 text-sm text-ink placeholder:text-muted"
         />
@@ -892,6 +894,12 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       </div>
 
       {enrollment && (
+        <div className="mb-8">
+          <CreditReportPanel borrowerId={borrowerId} enrollmentId={enrollment.id} onLettersGenerated={load} />
+        </div>
+      )}
+
+      {enrollment && (
         <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm font-medium text-ink">Dispute letters</p>
@@ -924,6 +932,11 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
           )}
         </div>
       )}
+
+      <div className="mb-8">
+        <p className="mb-3 text-sm font-medium text-ink">Credit stacking</p>
+        <ClientStackingPanel borrowerId={borrowerId} planTier={borrower.plan_tier} />
+      </div>
 
       {billing?.configured && (
         <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">

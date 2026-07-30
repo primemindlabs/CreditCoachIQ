@@ -14,8 +14,16 @@ interface Step {
   message_templates?: { id: string; name: string; channel: string; subject: string | null } | null;
 }
 interface Campaign { id: string; name: string; status: string; trigger_type: string; trigger_config: { stage?: string } | null }
+interface Enrollment { id: string; status: string; current_step_order: number; enrolled_at: string; completed_at: string | null; borrowers: { id: string; first_name: string; last_name: string } | null }
+interface PickPerson { id: string; first_name: string; last_name: string }
 
 const STAGES = ['credit_coaching', 'credit_stacking', 'loan_ready', 'handed_off'];
+const PICKER_SEGMENTS: { value: string; label: string }[] = [
+  { value: 'active', label: 'Active clients' },
+  { value: 'leads', label: 'Leads' },
+  { value: 'funded', label: 'Funded' },
+  { value: 'denied', label: 'Denied' },
+];
 
 export default function CampaignBuilderPage() {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +38,16 @@ export default function CampaignBuilderPage() {
   const [newTemplate, setNewTemplate] = useState('');
   const [newDelay, setNewDelay] = useState(24);
   const [error, setError] = useState<string | null>(null);
+
+  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
+  const [showEnroll, setShowEnroll] = useState(false);
+  const [pickerSegment, setPickerSegment] = useState('active');
+  const [pickerPeople, setPickerPeople] = useState<PickPerson[]>([]);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [pickedIds, setPickedIds] = useState<Set<string>>(new Set());
+  const [enrolling, setEnrolling] = useState(false);
+  const [enrollResult, setEnrollResult] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
@@ -56,6 +74,70 @@ export default function CampaignBuilderPage() {
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
+
+  const loadEnrollments = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/campaigns/${id}/enroll`);
+      if (res.ok) {
+        const d = await res.json();
+        setEnrollments(d.enrollments ?? []);
+      }
+    } catch {
+      // Non-critical — the enrolled-clients list just won't refresh this pass.
+    }
+  }, [id]);
+
+  useEffect(() => { loadEnrollments(); }, [loadEnrollments]);
+
+  const loadPicker = useCallback(async (segment: string) => {
+    setPickerLoading(true);
+    try {
+      const res = await fetch(`/api/coach/clients?segment=${segment}&all=true`);
+      if (res.ok) {
+        const d = await res.json();
+        setPickerPeople(d.people ?? []);
+      }
+    } catch {
+      // Non-critical — picker list just stays empty; try again by reopening.
+    } finally {
+      setPickerLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { if (showEnroll) loadPicker(pickerSegment); }, [showEnroll, pickerSegment, loadPicker]);
+
+  function togglePick(personId: string) {
+    setPickedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(personId)) next.delete(personId); else next.add(personId);
+      return next;
+    });
+  }
+
+  async function enrollPicked() {
+    if (pickedIds.size === 0) return;
+    setEnrolling(true);
+    setEnrollResult(null);
+    try {
+      const res = await fetch(`/api/campaigns/${id}/enroll`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrowerIds: Array.from(pickedIds) }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEnrollResult(d.error ?? `Could not enroll that group (${res.status}).`);
+        return;
+      }
+      setEnrollResult(`Enrolled ${d.enrolled} client${d.enrolled === 1 ? '' : 's'}.`);
+      setPickedIds(new Set());
+      loadEnrollments();
+    } catch {
+      setEnrollResult('Could not reach the server.');
+    } finally {
+      setEnrolling(false);
+    }
+  }
 
   function onDragStart(index: number) { setDragIndex(index); }
   function onDragOver(e: React.DragEvent, index: number) {
@@ -190,6 +272,65 @@ export default function CampaignBuilderPage() {
         </div>
       )}
 
+      <div className="mb-8 rounded-card border border-line bg-white p-6">
+        <div className="mb-4 flex items-center justify-between">
+          <div>
+            <p className="text-[15px] font-medium text-ink">Enrolled clients</p>
+            <p className="mt-0.5 text-xs text-muted">{enrollments.length} enrolled, add people individually or as a group below.</p>
+          </div>
+          <button onClick={() => setShowEnroll((s) => !s)} className="rounded-control border border-line px-3.5 py-2 text-sm text-ink hover:border-ink/30">
+            {showEnroll ? 'Close' : 'Add clients'}
+          </button>
+        </div>
+
+        {enrollments.length > 0 && (
+          <div className="mb-4 space-y-2">
+            {enrollments.slice(0, 8).map((e) => (
+              <div key={e.id} className="flex items-center justify-between border-b border-line pb-2 text-sm last:border-0 last:pb-0">
+                <span className="text-ink">{e.borrowers ? `${e.borrowers.first_name} ${e.borrowers.last_name}` : 'Client removed'}</span>
+                <span className="text-xs text-muted">{e.status}, step {e.current_step_order}</span>
+              </div>
+            ))}
+            {enrollments.length > 8 && <p className="text-xs text-muted">+ {enrollments.length - 8} more</p>}
+          </div>
+        )}
+
+        {showEnroll && (
+          <div className="rounded-control border border-line bg-paper p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <select value={pickerSegment} onChange={(e) => setPickerSegment(e.target.value)} className="rounded-control border border-line px-2.5 py-1.5 text-sm text-ink">
+                {PICKER_SEGMENTS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+              </select>
+              <input
+                value={pickerQuery}
+                onChange={(e) => setPickerQuery(e.target.value)}
+                placeholder="Search by name…"
+                className="min-w-[200px] flex-1 rounded-control border border-line px-2.5 py-1.5 text-sm text-ink placeholder:text-muted"
+              />
+              <button onClick={enrollPicked} disabled={enrolling || pickedIds.size === 0} className="rounded-control bg-money px-3.5 py-1.5 text-sm font-medium text-white hover:bg-money-hover disabled:opacity-50">
+                {enrolling ? 'Enrolling…' : `Enroll ${pickedIds.size || ''}`.trim()}
+              </button>
+            </div>
+            {enrollResult && <p className="mb-3 text-xs text-ink">{enrollResult}</p>}
+            {pickerLoading ? (
+              <p className="text-sm text-muted">Loading…</p>
+            ) : (
+              <div className="max-h-64 space-y-1 overflow-y-auto">
+                {pickerPeople
+                  .filter((p) => `${p.first_name} ${p.last_name}`.toLowerCase().includes(pickerQuery.trim().toLowerCase()))
+                  .map((p) => (
+                    <label key={p.id} className="flex items-center gap-2 rounded-control px-2 py-1.5 text-sm text-ink hover:bg-white">
+                      <input type="checkbox" checked={pickedIds.has(p.id)} onChange={() => togglePick(p.id)} className="rounded border-line" />
+                      {p.first_name} {p.last_name}
+                    </label>
+                  ))}
+                {pickerPeople.length === 0 && <p className="px-2 py-1.5 text-sm text-muted">Nobody in this segment.</p>}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       <div className="mb-4 flex items-center justify-between">
         <p className="text-[15px] font-medium text-ink">Steps</p>
         {dirty && <button onClick={saveOrder} className="rounded-control bg-money px-4 py-2 text-sm font-medium text-white hover:bg-money-hover">Save order</button>}
@@ -217,7 +358,7 @@ export default function CampaignBuilderPage() {
 
         {steps.length === 0 && (
           <div className="rounded-card border border-dashed border-line bg-white p-10 text-center text-sm text-muted">
-            No steps yet — add one below to start the sequence.
+            No steps yet. Add one below to start the sequence.
           </div>
         )}
       </div>

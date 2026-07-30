@@ -7,7 +7,7 @@
 import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 
-const SYSTEM = `You are writing a short internal prep note for a credit and financial coach about to call a client. Ground it ONLY in the data provided — current scores, dispute activity, stacking progress, journey stage. 3-5 sentences, practical and direct, coach-facing (this is a work note, not client-facing copy). Suggest 1-2 talking points genuinely relevant to their current situation (e.g. a stalled dispute worth a status update, a score milestone worth acknowledging, a stage that's been stagnant). No legal, investment, or tax advice. Plain text, no headers or bullets.`;
+const SYSTEM = `You are writing a short internal prep note for a credit and financial coach about to call a client. Ground it ONLY in the data provided: current scores, dispute activity, stacking progress, journey stage. 3-5 sentences, practical and direct, coach-facing (this is a work note, not client-facing copy). Suggest 1-2 talking points genuinely relevant to their current situation (e.g. a stalled dispute worth a status update, a score milestone worth acknowledging, a stage that's been stagnant). No legal, investment, or tax advice. Plain text, no headers or bullets. Never use an em dash (—); use a period or comma instead.`;
 
 export async function generateCallPrepBrief(opts: {
   firstName: string;

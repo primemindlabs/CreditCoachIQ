@@ -60,7 +60,7 @@ export default function PortalMessagesPage({ params }: { params: { token: string
         {loading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : messages.length === 0 ? (
-          <p className="text-sm text-muted">No messages yet — send your coach a note anytime.</p>
+          <p className="text-sm text-muted">No messages yet. Send your coach a note anytime.</p>
         ) : (
           <div className="space-y-3">
             {messages.map((m) => (

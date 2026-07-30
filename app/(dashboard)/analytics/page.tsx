@@ -136,14 +136,37 @@ export default function AnalyticsPage() {
     <div>
       <h1 className="mb-8 text-[26px] font-medium text-ink">Analytics</h1>
 
+      {/* Commissions — leads the page now, ahead of revenue and outcomes. */}
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card label="Commissions paid this month" value={currency(data.commissions.paidThisMonth)} />
+        <Card label="Pending payout" value={currency(data.commissions.pendingPayout)} />
+        <Card label="YTD commission earnings" value={currency(data.commissions.ytdEarnings)} />
+      </div>
+
+      <div className="mb-8 rounded-card border border-line bg-white p-6">
+        <p className="mb-4 text-sm font-medium text-ink">Commissions by referral partner</p>
+        {data.commissions.byPartner.length === 0 ? (
+          <p className="text-sm text-muted">No commission activity recorded yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {data.commissions.byPartner.map((p) => (
+              <div key={p.referralPartnerId} className="flex items-center justify-between border-b border-line pb-2 text-sm last:border-0 last:pb-0">
+                <span className="text-ink">{p.partnerName}</span>
+                <span className="text-muted">{currency(p.paid)} paid{p.pending > 0 ? `, ${currency(p.pending)} pending` : ''}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card label="Monthly recurring revenue" value={currency(data.revenue.mrr)} sub={data.revenue.error ?? `${data.revenue.activeSubscriptions} active subscriptions`} />
         <Card label="Active clients" value={String(data.outcomes.activeClients)} sub={`${data.outcomes.totalClients} total`} />
-        <Card label="Handoff conversion rate" value={data.handoffConversion.conversionRate != null ? `${data.handoffConversion.conversionRate}%` : '—'} sub={`${data.handoffConversion.funded} funded of ${data.handoffConversion.handoffsSent} handed off`} />
+        <Card label="Handoff conversion rate" value={data.handoffConversion.conversionRate != null ? `${data.handoffConversion.conversionRate}%` : 'n/a'} sub={`${data.handoffConversion.funded} funded of ${data.handoffConversion.handoffsSent} handed off`} />
       </div>
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card label="Avg. score improvement" value={data.outcomes.avgScoreImprovement != null ? `+${data.outcomes.avgScoreImprovement}` : '—'} sub="Experian, current vs. starting" />
+        <Card label="Avg. score improvement" value={data.outcomes.avgScoreImprovement != null ? `+${data.outcomes.avgScoreImprovement}` : 'n/a'} sub="Experian, current vs. starting" />
         <Card label="Mortgage-ready clients" value={String(data.outcomes.mortgageReadyCount)} />
         <Card label="Handoffs in progress" value={String(data.handoffConversion.inProgress)} sub={`${data.handoffConversion.declined} declined/withdrawn`} />
       </div>
@@ -170,7 +193,7 @@ export default function AnalyticsPage() {
 
       <div className="mb-8 rounded-card border border-line bg-white p-6">
         <p className="mb-1 text-sm font-medium text-ink">Average time in stage</p>
-        <p className="mb-4 text-sm text-muted">Based on completed transitions only — clients still in a stage today aren&apos;t counted until they move.</p>
+        <p className="mb-4 text-sm text-muted">Based on completed transitions only. Clients still in a stage today aren&apos;t counted until they move.</p>
         {Object.keys(data.timeInStage.avgDaysByStage).length === 0 ? (
           <p className="text-sm text-muted">Not enough stage-transition history yet.</p>
         ) : (
@@ -240,30 +263,6 @@ export default function AnalyticsPage() {
         </button>
       </div>
 
-      {/* Commissions — folded into Analytics as a KPI surface rather than a
-          standalone module, per direction. Reads referral_commission_events,
-          the append-only audit table behind the referral partner program. */}
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Card label="Commissions paid this month" value={currency(data.commissions.paidThisMonth)} />
-        <Card label="Pending payout" value={currency(data.commissions.pendingPayout)} />
-        <Card label="YTD commission earnings" value={currency(data.commissions.ytdEarnings)} />
-      </div>
-
-      <div className="rounded-card border border-line bg-white p-6">
-        <p className="mb-4 text-sm font-medium text-ink">Commissions by referral partner</p>
-        {data.commissions.byPartner.length === 0 ? (
-          <p className="text-sm text-muted">No commission activity recorded yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {data.commissions.byPartner.map((p) => (
-              <div key={p.referralPartnerId} className="flex items-center justify-between border-b border-line pb-2 text-sm last:border-0 last:pb-0">
-                <span className="text-ink">{p.partnerName}</span>
-                <span className="text-muted">{currency(p.paid)} paid{p.pending > 0 ? ` · ${currency(p.pending)} pending` : ''}</span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
     </div>
   );
 }

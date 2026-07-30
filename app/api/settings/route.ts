@@ -45,7 +45,7 @@ export const POST = withErrorHandling(async function POST(req: NextRequest): Pro
   const { error } = await sb.from('credit_repair_org_settings').upsert(patch, { onConflict: 'org_id' });
   if (error) {
     if (error.message.includes('duplicate key') && error.message.includes('embed_slug')) {
-      return NextResponse.json({ error: 'That slug is already taken — try another.' }, { status: 409 });
+      return NextResponse.json({ error: 'That slug is already taken. Try another.' }, { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

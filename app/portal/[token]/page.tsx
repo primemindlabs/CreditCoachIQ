@@ -167,7 +167,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
     const linkData = await res.json();
     if (!linkData.configured) {
       setLinking(false);
-      setLinkError('Bank linking isn’t enabled yet — ask your coach.');
+      setLinkError('Bank linking isn’t enabled yet. Ask your coach.');
       return;
     }
     if (linkData.error || !linkData.linkToken) {
@@ -247,7 +247,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
               ) : (
                 <>
                   <p className="text-[16px] font-medium text-ink">Goal achieved: {celebration.title}</p>
-                  <p className="mt-1 text-sm text-money-hover">Nice work — talk to your coach about what's next.</p>
+                  <p className="mt-1 text-sm text-money-hover">Nice work. Talk to your coach about what's next.</p>
                 </>
               )}
             </div>
@@ -402,7 +402,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
             </button>
           </div>
           <p className="mb-4 flex items-center gap-1 text-xs text-muted">
-            <Lock size={11} strokeWidth={2} /> Bank-grade encryption via Plaid — we never see or store your login credentials.
+            <Lock size={11} strokeWidth={2} /> Bank-grade encryption via Plaid. We never see or store your login credentials.
           </p>
           {linkError && <p className="mb-3 text-sm text-terra">{linkError}</p>}
           {accounts.length === 0 ? (
@@ -450,7 +450,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
             </div>
             <div className="flex-1 space-y-3 overflow-y-auto p-4">
               {chatMessages.length === 0 && (
-                <p className="text-xs text-muted">Ask things like &ldquo;what does this negative remark mean&rdquo; or &ldquo;why can&apos;t I dispute this yet&rdquo; — answered from your own account data.</p>
+                <p className="text-xs text-muted">Ask things like &ldquo;what does this negative remark mean&rdquo; or &ldquo;why can&apos;t I dispute this yet&rdquo;, answered from your own account data.</p>
               )}
               {chatMessages.map((m, i) => (
                 <div key={i} className={`rounded-control px-3 py-2 text-sm ${m.role === 'user' ? 'ml-6 bg-iris-tint text-ink' : 'mr-6 bg-paper text-ink'}`}>

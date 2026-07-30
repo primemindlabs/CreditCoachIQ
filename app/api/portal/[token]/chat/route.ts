@@ -48,7 +48,7 @@ export const POST = withErrorHandling(async function POST(req: Request, { params
     `Name: ${borrower.first_name}`,
     `Journey stage: ${borrower.journey_stage}`,
     enrollment
-      ? `Enrollment status: ${enrollment.status}. Scores — Experian: ${enrollment.current_score_exp ?? 'unknown'}, Equifax: ${enrollment.current_score_eqx ?? 'unknown'}, TransUnion: ${enrollment.current_score_tu ?? 'unknown'}. Target score: ${enrollment.target_score}. CROA agreement signed: ${enrollment.croa_disclosure_signed_at ? 'yes' : 'no'}.`
+      ? `Enrollment status: ${enrollment.status}. Scores: Experian ${enrollment.current_score_exp ?? 'unknown'}, Equifax ${enrollment.current_score_eqx ?? 'unknown'}, TransUnion ${enrollment.current_score_tu ?? 'unknown'}. Target score: ${enrollment.target_score}. CROA agreement signed: ${enrollment.croa_disclosure_signed_at ? 'yes' : 'no'}.`
       : 'No active credit-repair enrollment on file.',
     tradelines?.length
       ? `Tradelines on file:\n${tradelines.map((t) => `- ${t.creditor_name} (${t.bureau}, ${t.account_type ?? 'unknown type'}): status=${t.status ?? 'unknown'}, payment_status=${t.payment_status ?? 'unknown'}, negative_remarks=${(t.negative_remarks as string[] | null)?.join(', ') || 'none'}, disputable=${t.is_disputable}, dispute_status=${t.dispute_status}`).join('\n')}`

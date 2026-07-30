@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     const { data: borrower } = await sb.from('borrowers').select('assigned_agent_id').eq('id', e.borrower_id).maybeSingle();
     await sb.from('coach_tasks').insert({
       org_id: e.org_id, borrower_id: e.borrower_id, assigned_to: borrower?.assigned_agent_id ?? null,
-      source: 'system', type: 'score_target_hit', title: `Score target hit (${best}) — ready to advance?`, due_date: new Date().toISOString().slice(0, 10),
+      source: 'system', type: 'score_target_hit', title: `Score target hit (${best}), ready to advance?`, due_date: new Date().toISOString().slice(0, 10),
     });
     scoreNudges += 1;
   }
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     const { data: borrower } = await sb.from('borrowers').select('assigned_agent_id').eq('id', plan.borrower_id).maybeSingle();
     await sb.from('coach_tasks').insert({
       org_id: plan.org_id, borrower_id: plan.borrower_id, assigned_to: borrower?.assigned_agent_id ?? null,
-      source: 'system', type: 'stack_target_hit', title: `Stacking target hit ($${capital.toLocaleString()}) — ready to advance?`, due_date: new Date().toISOString().slice(0, 10),
+      source: 'system', type: 'stack_target_hit', title: `Stacking target hit ($${capital.toLocaleString()}), ready to advance?`, due_date: new Date().toISOString().slice(0, 10),
     });
     capitalNudges += 1;
   }

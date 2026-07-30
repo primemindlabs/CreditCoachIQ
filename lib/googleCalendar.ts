@@ -24,7 +24,7 @@ const CALENDAR_API = 'https://www.googleapis.com/calendar/v3';
 
 function requireEnv(name: string): string {
   const val = process.env[name];
-  if (!val) throw new Error(`${name} is not set — connect a Google Cloud OAuth client before using Google Calendar sync.`);
+  if (!val) throw new Error(`${name} is not set. Connect a Google Cloud OAuth client before using Google Calendar sync.`);
   return val;
 }
 
