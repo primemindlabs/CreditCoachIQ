@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Zap, Mail, MessageSquare, CheckCircle2 } from 'lucide-react';
+import Eyebrow from '@/components/ui/Eyebrow';
 
 interface Template { id: string; name: string; channel: 'email' | 'sms'; subject: string | null }
 interface Step {
@@ -245,8 +246,9 @@ export default function CampaignBuilderPage() {
 
       <div className="mb-8 flex items-start justify-between">
         <div>
-          <h1 className="text-[26px] font-medium text-ink">{campaign.name}</h1>
-          <p className="mt-1 text-sm text-muted">
+          <Eyebrow label="Automation" accent="iris" />
+          <h1 className="mt-2 text-[32px] font-medium leading-[1.05] tracking-tight text-ink">{campaign.name}</h1>
+          <p className="mt-2 text-sm text-muted">
             {campaign.trigger_type === 'journey_stage_enter' ? 'Fires when a client enters a stage' : 'Automation sequence'}
           </p>
         </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, ChevronRight, Phone } from 'lucide-react';
+import Eyebrow from '@/components/ui/Eyebrow';
 
 interface CallItem { id: string; scheduled_at: string; status: string; borrower_id: string; borrowers: { first_name: string; last_name: string } | null }
 interface ExternalEvent { id: string; summary: string; startISO: string | null }
@@ -65,8 +66,11 @@ export default function CalendarPage() {
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-[26px] font-medium text-ink">Calendar</h1>
-          <p className="mt-1 text-sm text-muted">
+          <Eyebrow label="Schedule" accent="iris" />
+          <h1 className="mt-2 text-[36px] font-medium leading-[1.05] tracking-tight text-ink">
+            <span className="italic text-iris">Calendar</span>
+          </h1>
+          <p className="mt-2 text-sm text-muted">
             {weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}, {addDays(weekStart, 6).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
         </div>

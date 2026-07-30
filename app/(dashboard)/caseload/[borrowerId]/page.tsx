@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Phone, RefreshCw, ShieldOff, Sparkles, MessageSquare, UserCheck } from 'lucide-react';
+import { Phone, RefreshCw, ShieldOff, Sparkles, MessageSquare, UserCheck, FileText, FileWarning, Target, CheckSquare } from 'lucide-react';
 import RadialScore from '@/components/ui/RadialScore';
 import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
@@ -11,6 +11,8 @@ import CreditReportPanel from '@/components/credit-reports/CreditReportPanel';
 import ClientStackingPanel from '@/components/stacking/ClientStackingPanel';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { Skeleton, SkeletonCards, SkeletonRows } from '@/components/ui/Skeleton';
+import Eyebrow from '@/components/ui/Eyebrow';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface ClientDetail {
   borrower: {
@@ -690,7 +692,10 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       <div className="mb-6 border-b border-line pb-8">
         <div className="flex flex-col items-start justify-between gap-8 sm:flex-row sm:items-center">
           <div>
-            <h1 className="text-[26px] font-medium leading-tight text-ink">{borrower.first_name} {borrower.last_name}</h1>
+            <Eyebrow label={enrollment ? 'Client' : 'Lead'} />
+            <h1 className="mt-2 text-[38px] font-medium leading-[1.05] tracking-tight text-ink">
+              {borrower.first_name} <span className="italic text-money">{borrower.last_name}</span>
+            </h1>
             <p className="mt-2 text-sm text-muted">
               {borrower.email ?? 'No email'} · {borrower.phone ?? 'No phone'} · {borrower.plan_tier.replace('_', ' ')}
               {data.referralPartnerName ? ` · Referred by ${data.referralPartnerName}` : ''}
@@ -831,7 +836,7 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         </div>
         {docError && <p className="mb-3 text-xs text-terra">{docError}</p>}
         {documents.length === 0 ? (
-          <p className="text-sm text-muted">No documents on file yet.</p>
+          <EmptyState icon={<FileText size={17} strokeWidth={1.75} />} title="No documents on file yet" sub="Upload an ID, income proof, or bank statement above to get started." compact />
         ) : (
           <div className="space-y-2">
             {documents.map((doc) => (
@@ -924,7 +929,7 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
             )}
           </div>
           {disputes.length === 0 ? (
-            <p className="text-sm text-muted">No disputes drafted yet.</p>
+            <EmptyState icon={<FileWarning size={17} strokeWidth={1.75} />} title="No disputes drafted yet" sub="Drafted letters will show up here once tradelines are selected in the credit report above." compact accent="iris" />
           ) : (
             <div className="space-y-3">
               {disputes.map((d) => (
@@ -986,7 +991,9 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-3 text-sm font-medium text-ink">Goals</p>
-          {data.goals.length === 0 ? <p className="text-sm text-muted">No goals set.</p> : (
+          {data.goals.length === 0 ? (
+            <EmptyState icon={<Target size={17} strokeWidth={1.75} />} title="No goals set" compact accent="gold" />
+          ) : (
             <div className="space-y-3">
               {data.goals.map((g) => (
                 g.target_amount ? (
@@ -1010,7 +1017,9 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         </div>
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-3 text-sm font-medium text-ink">Open tasks</p>
-          {data.openTasks.length === 0 ? <p className="mb-3 text-sm text-muted">Nothing open.</p> : (
+          {data.openTasks.length === 0 ? (
+            <EmptyState icon={<CheckSquare size={17} strokeWidth={1.75} />} title="Nothing open" compact />
+          ) : (
             <div className="mb-3 space-y-2">
               {data.openTasks.map((t) => (
                 <div key={t.id} className="flex items-center justify-between gap-2 text-sm">

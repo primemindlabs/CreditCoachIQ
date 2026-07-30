@@ -2,8 +2,10 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Users } from 'lucide-react';
 import { SkeletonRows } from '@/components/ui/Skeleton';
+import Eyebrow from '@/components/ui/Eyebrow';
+import EmptyState from '@/components/ui/EmptyState';
 
 type Segment = 'leads' | 'active' | 'funded' | 'denied';
 
@@ -418,8 +420,11 @@ export default function ClientsPage() {
     <div>
       <div className="mb-6 flex items-end justify-between">
         <div>
-          <h1 className="text-[26px] font-medium text-ink">Clients</h1>
-          <p className="mt-1 text-sm text-muted">Everyone in the pipeline, prospect to funded, in one place.</p>
+          <Eyebrow label="Caseload" />
+          <h1 className="mt-2 text-[36px] font-medium leading-[1.05] tracking-tight text-ink">
+            <span className="italic text-money">Clients</span>
+          </h1>
+          <p className="mt-2 text-sm text-muted">Everyone in the pipeline, prospect to funded, in one place.</p>
         </div>
         <div className="flex items-center gap-3">
           {canSeeAll && (
@@ -672,8 +677,8 @@ export default function ClientsPage() {
       {loading ? (
         <SkeletonRows count={6} />
       ) : filtered.length === 0 ? (
-        <div className="rounded-card border border-line bg-white p-12 text-center shadow-card">
-          <p className="text-[15px] text-ink">Nobody here yet</p>
+        <div className="rounded-card border border-line bg-white shadow-card">
+          <EmptyState icon={<Users size={18} strokeWidth={1.75} />} title="Nobody here yet" sub={query || statusFilter || stageFilter ? 'No one matches the current filters.' : 'This list fills in as leads come in and clients move through the pipeline.'} />
         </div>
       ) : tab === 'active' && viewMode === 'board' ? (
         <div className="flex gap-4 overflow-x-auto pb-4">

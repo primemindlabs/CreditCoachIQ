@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
-import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, UserPlus } from 'lucide-react';
+import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, UserPlus, CalendarDays, PartyPopper } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
 import { Skeleton, SkeletonCards, SkeletonRows } from '@/components/ui/Skeleton';
+import Eyebrow from '@/components/ui/Eyebrow';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface BorrowerRef { first_name: string; last_name: string }
 interface TaskItem { id: string; type: string | null; title: string; due_date: string | null; borrower_id: string | null; borrowers: BorrowerRef | null }
@@ -86,7 +88,7 @@ export default function TodayPage() {
       <div>
         <div className="mb-8 border-b border-line pb-8">
           <Skeleton className="h-3 w-16" />
-          <Skeleton className="mt-3 h-9 w-72" />
+          <Skeleton className="mt-3 h-11 w-80" />
           <Skeleton className="mt-4 h-4 w-96" />
         </div>
         <div className="mb-8">
@@ -100,11 +102,13 @@ export default function TodayPage() {
   return (
     <div>
       <div className="mb-8 border-b border-line pb-8">
-        <p className="text-[12px] uppercase tracking-wide text-muted">Today</p>
-        <h1 className="mt-1 text-[34px] font-medium leading-tight text-ink">
-          {needsAttention === 0 ? "You're all caught up" : (
+        <Eyebrow n={1} label="Today" />
+        <h1 className="mt-2 text-[44px] font-medium leading-[1.05] tracking-tight text-ink">
+          {needsAttention === 0 ? (
+            <>You&apos;re all <span className="italic text-money">caught up</span></>
+          ) : (
             <>
-              <span className="figure">{needsAttention}</span> thing{needsAttention === 1 ? '' : 's'} need your attention
+              <span className="figure text-money">{needsAttention}</span> thing{needsAttention === 1 ? '' : 's'} need your attention
             </>
           )}
         </h1>
@@ -132,7 +136,7 @@ export default function TodayPage() {
       <div className="mb-6 rounded-card border border-line border-l-2 border-l-money bg-white p-6 shadow-card">
         <p className="mb-4 text-sm font-medium text-ink">Today&apos;s calls</p>
         {data.todayCalls.length === 0 && data.externalTodayEvents.length === 0 ? (
-          <p className="text-sm text-muted">Nothing on the books for today.</p>
+          <EmptyState icon={<Phone size={17} strokeWidth={1.75} />} title="Nothing on the books" sub="No calls scheduled for today." compact />
         ) : (
           <div className="space-y-3">
             {data.todayCalls.map((c) => (
@@ -154,7 +158,9 @@ export default function TodayPage() {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-4 text-sm font-medium text-ink">Open tasks</p>
-          {data.tasks.length === 0 ? <p className="text-sm text-muted">Nothing open.</p> : (
+          {data.tasks.length === 0 ? (
+            <EmptyState icon={<CheckSquare size={17} strokeWidth={1.75} />} title="Nothing open" sub="No outstanding tasks right now." compact />
+          ) : (
             <div className="space-y-3">
               {data.tasks.map((t) => (
                 <div key={t.id} className="flex items-center justify-between gap-3 border-b border-line pb-3 text-sm last:border-0 last:pb-0">
@@ -171,7 +177,9 @@ export default function TodayPage() {
 
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-4 text-sm font-medium text-ink">Later this week</p>
-          {data.upcomingCalls.length === 0 ? <p className="text-sm text-muted">Nothing else booked this week.</p> : (
+          {data.upcomingCalls.length === 0 ? (
+            <EmptyState icon={<CalendarDays size={17} strokeWidth={1.75} />} title="Nothing else booked" sub="Your week is clear beyond today." compact accent="iris" />
+          ) : (
             <div className="space-y-3">
               {data.upcomingCalls.map((c) => (
                 <Link key={c.id} href={`/caseload/${c.borrower_id}`} className="flex items-center justify-between border-b border-line pb-3 text-sm last:border-0 last:pb-0 hover:text-money">
@@ -185,7 +193,9 @@ export default function TodayPage() {
 
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-4 text-sm font-medium text-ink">Unread messages</p>
-          {data.unreadMessages.length === 0 && data.unreadTexts.length === 0 ? <p className="text-sm text-muted">All caught up.</p> : (
+          {data.unreadMessages.length === 0 && data.unreadTexts.length === 0 ? (
+            <EmptyState icon={<MessageCircle size={17} strokeWidth={1.75} />} title="All caught up" sub="No unread portal messages or texts." compact accent="gold" />
+          ) : (
             <div className="space-y-3">
               {data.unreadMessages.map((m) => (
                 <Link key={m.id} href={`/caseload/${m.borrower_id}`} className="block border-b border-line pb-3 text-sm last:border-0 last:pb-0 hover:text-money">
@@ -206,7 +216,7 @@ export default function TodayPage() {
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-4 text-sm font-medium text-ink">Needs review</p>
           {data.openComplaints.length === 0 && data.paymentFailures.length === 0 ? (
-            <p className="text-sm text-muted">Nothing flagged.</p>
+            <EmptyState icon={<PartyPopper size={17} strokeWidth={1.75} />} title="Nothing flagged" sub="No open complaints or failed payments." compact />
           ) : (
             <div className="space-y-3">
               {data.openComplaints.map((c) => (

@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Zap } from 'lucide-react';
+import Eyebrow from '@/components/ui/Eyebrow';
+import EmptyState from '@/components/ui/EmptyState';
 
 type TriggerType = 'manual' | 'client_enrolled' | 'journey_stage_enter' | 'dispute_response_received' | 'goal_achieved' | 'stack_promo_expiring' | 'loan_ready_reached' | 'scheduled';
 
@@ -83,8 +86,11 @@ export default function CampaignsPage() {
     <div>
       <div className="mb-10 flex items-end justify-between">
         <div>
-          <h1 className="text-[26px] font-medium text-ink">Campaigns</h1>
-          <p className="mt-1 text-sm text-muted">Automated email and text sequences, built once and personalized per client at send time.</p>
+          <Eyebrow label="Automation" accent="iris" />
+          <h1 className="mt-2 text-[36px] font-medium leading-[1.05] tracking-tight text-ink">
+            <span className="italic text-iris">Campaigns</span>
+          </h1>
+          <p className="mt-2 text-sm text-muted">Automated email and text sequences, built once and personalized per client at send time.</p>
         </div>
         <button onClick={() => setShowCreate(true)} className="rounded-control bg-money px-5 py-3 text-sm font-medium text-white hover:bg-money-hover">
           New campaign
@@ -118,9 +124,13 @@ export default function CampaignsPage() {
       {loading ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : campaigns.length === 0 ? (
-        <div className="rounded-card border border-line bg-white p-12 text-center">
-          <p className="text-[15px] text-ink">No campaigns yet</p>
-          <p className="mt-1 text-sm text-muted">Create one to start automating client touchpoints.</p>
+        <div className="rounded-card border border-line bg-white">
+          <EmptyState
+            icon={<Zap size={18} strokeWidth={1.75} />}
+            title="No campaigns yet"
+            sub="Use the New campaign button above to start automating client touchpoints."
+            accent="iris"
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

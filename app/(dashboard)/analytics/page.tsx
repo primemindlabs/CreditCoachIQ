@@ -1,10 +1,13 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { HandCoins, Target, History } from 'lucide-react';
 import BarChart from '@/components/ui/BarChart';
 import Funnel from '@/components/ui/Funnel';
 import ProgressBar from '@/components/ui/ProgressBar';
 import { SkeletonCards } from '@/components/ui/Skeleton';
+import Eyebrow from '@/components/ui/Eyebrow';
+import EmptyState from '@/components/ui/EmptyState';
 
 interface AnalyticsData {
   revenue: { mrr: number; activeSubscriptions: number; error?: string };
@@ -138,7 +141,8 @@ export default function AnalyticsPage() {
   if (loading) {
     return (
       <div>
-        <h1 className="mb-8 text-[26px] font-medium text-ink">Analytics</h1>
+        <Eyebrow label="Performance" />
+        <h1 className="mb-8 mt-2 text-[40px] font-medium leading-[1.05] tracking-tight text-ink">Analytics</h1>
         <div className="mb-4"><SkeletonCards count={3} /></div>
         <div className="mb-8"><SkeletonCards count={3} /></div>
       </div>
@@ -149,16 +153,24 @@ export default function AnalyticsPage() {
 
   return (
     <div>
-      <h1 className="mb-8 text-[26px] font-medium text-ink">Analytics</h1>
+      <div className="mb-8 border-b border-line pb-8">
+        <Eyebrow label="Performance" />
+        <h1 className="mt-2 text-[40px] font-medium leading-[1.05] tracking-tight text-ink">
+          <span className="italic text-money">Analytics</span>
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm text-muted">Commissions, pipeline health, and production goals — pulled live from the caseload.</p>
+      </div>
 
       {/* Commissions — leads the page now, ahead of revenue and outcomes. */}
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Eyebrow n={1} label="Commissions" />
+      <div className="mb-4 mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card label="Commissions paid this month" value={currency(data.commissions.paidThisMonth)} />
         <Card label="Pending payout" value={currency(data.commissions.pendingPayout)} />
         <Card label="YTD commission earnings" value={currency(data.commissions.ytdEarnings)} />
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Eyebrow n={2} label="Trends" accent="iris" />
+      <div className="mb-8 mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <div className="rounded-card border border-line bg-white p-6">
           <p className="mb-1 text-sm font-medium text-ink">New enrollments</p>
           <p className="mb-3 text-xs text-muted">Last 6 months</p>
@@ -179,7 +191,7 @@ export default function AnalyticsPage() {
       <div className="mb-8 rounded-card border border-line bg-white p-6">
         <p className="mb-4 text-sm font-medium text-ink">Commissions by referral partner</p>
         {data.commissions.byPartner.length === 0 ? (
-          <p className="text-sm text-muted">No commission activity recorded yet.</p>
+          <EmptyState icon={<HandCoins size={17} strokeWidth={1.75} />} title="No commission activity yet" sub="Paid and pending amounts will appear here once a referral partner is credited." compact />
         ) : (
           <div className="space-y-2">
             {data.commissions.byPartner.map((p) => (
@@ -192,7 +204,8 @@ export default function AnalyticsPage() {
         )}
       </div>
 
-      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+      <Eyebrow n={3} label="Revenue & Outcomes" accent="gold" />
+      <div className="mb-4 mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card label="Monthly recurring revenue" value={currency(data.revenue.mrr)} sub={data.revenue.error ?? `${data.revenue.activeSubscriptions} active subscriptions`} />
         <Card label="Active clients" value={String(data.outcomes.activeClients)} sub={`${data.outcomes.totalClients} total`} />
         <Card label="Handoff conversion rate" value={data.handoffConversion.conversionRate != null ? `${data.handoffConversion.conversionRate}%` : 'n/a'} sub={`${data.handoffConversion.funded} funded of ${data.handoffConversion.handoffsSent} handed off`} />
@@ -204,7 +217,8 @@ export default function AnalyticsPage() {
         <Card label="Handoffs in progress" value={String(data.handoffConversion.inProgress)} sub={`${data.handoffConversion.declined} declined/withdrawn`} />
       </div>
 
-      <div className="mb-8 rounded-card border border-line bg-white p-6">
+      <Eyebrow n={4} label="Pipeline" />
+      <div className="mb-8 mt-3 rounded-card border border-line bg-white p-6">
         <p className="mb-1 text-sm font-medium text-ink">Pipeline funnel</p>
         <p className="mb-4 text-xs text-muted">Clients currently at each stage, forward progression only. Paused and exited clients aren&apos;t part of the funnel flow.</p>
         <Funnel
@@ -221,7 +235,7 @@ export default function AnalyticsPage() {
         <p className="mb-1 text-sm font-medium text-ink">Average time in stage</p>
         <p className="mb-4 text-sm text-muted">Based on completed transitions only. Clients still in a stage today aren&apos;t counted until they move.</p>
         {Object.keys(data.timeInStage.avgDaysByStage).length === 0 ? (
-          <p className="text-sm text-muted">Not enough stage-transition history yet.</p>
+          <EmptyState icon={<History size={17} strokeWidth={1.75} />} title="Not enough history yet" sub="This fills in once clients complete stage transitions." compact accent="iris" />
         ) : (
           <div className="space-y-2">
             {Object.entries(data.timeInStage.avgDaysByStage).map(([stage, days]) => (
@@ -237,12 +251,13 @@ export default function AnalyticsPage() {
       {/* Production goals — coach/org-level targets, distinct from per-client
           financial_goals. Admin-managed here since goal-setting is a
           leadership/analytics action, not a caseload action. */}
-      <div className="mb-8 rounded-card border border-line bg-white p-6">
+      <Eyebrow n={5} label="Production Goals" accent="gold" />
+      <div className="mb-8 mt-3 rounded-card border border-line bg-white p-6">
         <p className="mb-4 text-sm font-medium text-ink">Production goals</p>
         {goalsLoading ? (
           <p className="text-sm text-muted">Loading…</p>
         ) : goals.length === 0 ? (
-          <p className="mb-4 text-sm text-muted">No goals set yet.</p>
+          <EmptyState icon={<Target size={17} strokeWidth={1.75} />} title="No goals set yet" sub="Set a monthly, quarterly, or annual target below to start tracking." compact accent="gold" />
         ) : (
           <div className="mb-5 space-y-4">
             {goals.map((g) => (
