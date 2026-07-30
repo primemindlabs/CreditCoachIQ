@@ -36,14 +36,14 @@ export const POST = withErrorHandling(async function POST(req: Request) {
       const { data: agent } = await sb.from('profiles').select('id').eq('id', body.assignedTo).eq('org_id', orgId).maybeSingle();
       if (!agent) return NextResponse.json({ error: 'That agent was not found in this org.' }, { status: 400 });
     }
-    const { error, count } = await sb
+    const { error, data } = await sb
       .from('borrowers')
       .update({ assigned_agent_id: body.assignedTo ?? null })
       .eq('org_id', orgId)
       .in('id', borrowerIds)
-      .select('id', { count: 'exact', head: true });
+      .select('id');
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ ok: true, updated: count ?? borrowerIds.length });
+    return NextResponse.json({ ok: true, updated: data?.length ?? borrowerIds.length });
   }
 
   if (body.action === 'sms') {
