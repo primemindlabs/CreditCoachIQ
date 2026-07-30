@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { UserPlus } from 'lucide-react';
+import { SkeletonRows } from '@/components/ui/Skeleton';
 
 type Segment = 'leads' | 'active' | 'funded' | 'denied';
 
@@ -669,7 +670,7 @@ export default function ClientsPage() {
       )}
 
       {loading ? (
-        <p className="text-sm text-muted">Loading…</p>
+        <SkeletonRows count={6} />
       ) : filtered.length === 0 ? (
         <div className="rounded-card border border-line bg-white p-12 text-center shadow-card">
           <p className="text-[15px] text-ink">Nobody here yet</p>

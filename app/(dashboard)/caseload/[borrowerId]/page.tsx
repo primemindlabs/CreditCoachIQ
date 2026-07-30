@@ -9,6 +9,8 @@ import JourneyRoadmap from '@/components/ui/JourneyRoadmap';
 import ActivityTimeline from '@/components/ui/ActivityTimeline';
 import CreditReportPanel from '@/components/credit-reports/CreditReportPanel';
 import ClientStackingPanel from '@/components/stacking/ClientStackingPanel';
+import ProgressBar from '@/components/ui/ProgressBar';
+import { Skeleton, SkeletonCards, SkeletonRows } from '@/components/ui/Skeleton';
 
 interface ClientDetail {
   borrower: {
@@ -380,6 +382,8 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       if (failed) {
         const reason = d.results?.find((r: { status: string; error?: string }) => r.status === 'failed')?.error;
         setPortalMsg(reason ?? d.error ?? 'Could not mail that letter.');
+      } else if (d.mockedCount > 0) {
+        setPortalMsg('Marked sent, but LOB_API_KEY is not configured, so nothing was actually mailed. Set it in your environment to send real certified mail.');
       }
       load();
     } catch {
@@ -409,6 +413,8 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       const failedCount = results.filter((r) => r.status === 'failed').length;
       if (!res.ok || failedCount > 0) {
         setPortalMsg(`${failedCount || results.length} of ${selectedDisputeIds.size} letter(s) failed to send${d.error ? `: ${d.error}` : ''}.`);
+      } else if (d.mockedCount > 0) {
+        setPortalMsg(`Marked sent, but LOB_API_KEY is not configured, so ${d.mockedCount} letter(s) were not actually mailed. Set it in your environment to send real certified mail.`);
       }
       setSelectedDisputeIds(new Set());
       load();
@@ -661,8 +667,16 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
 
   if (loading || !data) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-sm text-muted">Loading…</p>
+      <div>
+        <div className="mb-8 flex items-center gap-4">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-48" />
+            <Skeleton className="h-3 w-32" />
+          </div>
+        </div>
+        <div className="mb-8"><SkeletonCards count={4} /></div>
+        <SkeletonRows count={3} />
       </div>
     );
   }
@@ -973,12 +987,23 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-3 text-sm font-medium text-ink">Goals</p>
           {data.goals.length === 0 ? <p className="text-sm text-muted">No goals set.</p> : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {data.goals.map((g) => (
-                <div key={g.id} className="flex justify-between text-sm">
-                  <span className="text-ink">{g.title}</span>
-                  <span className="text-muted">{currency(g.current_amount ?? 0)} / {g.target_amount ? currency(g.target_amount) : '—'}</span>
-                </div>
+                g.target_amount ? (
+                  <ProgressBar
+                    key={g.id}
+                    value={g.current_amount ?? 0}
+                    target={g.target_amount}
+                    accent="money"
+                    label={g.title}
+                    sub={`${currency(g.current_amount ?? 0)} / ${currency(g.target_amount)}`}
+                  />
+                ) : (
+                  <div key={g.id} className="flex justify-between text-sm">
+                    <span className="text-ink">{g.title}</span>
+                    <span className="text-muted">{currency(g.current_amount ?? 0)}, no target set</span>
+                  </div>
+                )
               ))}
             </div>
           )}

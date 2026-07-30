@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { Zap, Mail, MessageSquare, CheckCircle2 } from 'lucide-react';
 
 interface Template { id: string; name: string; channel: 'email' | 'sms'; subject: string | null }
 interface Step {
@@ -332,32 +333,66 @@ export default function CampaignBuilderPage() {
       </div>
 
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-[15px] font-medium text-ink">Steps</p>
+        <p className="text-[15px] font-medium text-ink">Flow</p>
         {dirty && <button onClick={saveOrder} className="rounded-control bg-money px-4 py-2 text-sm font-medium text-white hover:bg-money-hover">Save order</button>}
       </div>
 
-      <div className="space-y-3">
+      {/* Visual flow: trigger at top, each step connected by a line labeled
+          with its delay, ending in a completion node. Steps stay draggable
+          on the node itself (same reorder logic as before), this just
+          renders the sequence as a connected canvas instead of a plain list
+          so the automation actually reads as a flow at a glance. */}
+      <div className="flex flex-col items-center rounded-card border border-line bg-paper/60 p-8">
+        <div className="flex items-center gap-2 rounded-full border border-line bg-white px-4 py-2 shadow-card">
+          <Zap size={14} strokeWidth={1.75} className="text-gold" />
+          <span className="text-sm font-medium text-ink">
+            {campaign.trigger_type === 'journey_stage_enter' && campaign.trigger_config?.stage
+              ? `Enters ${campaign.trigger_config.stage.replace(/_/g, ' ')}`
+              : campaign.trigger_type.replace(/_/g, ' ')}
+          </span>
+        </div>
+
         {steps.map((step, i) => (
-          <div
-            key={step.id ?? i}
-            draggable
-            onDragStart={() => onDragStart(i)}
-            onDragOver={(e) => onDragOver(e, i)}
-            onDragEnd={onDragEnd}
-            className="flex cursor-grab items-center gap-4 rounded-card border border-line bg-white p-5 active:cursor-grabbing"
-          >
-            <span className="text-muted">⠿</span>
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-money-tint text-xs font-medium text-money-hover">{i + 1}</div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-ink">{step.message_templates?.name ?? 'Template'} <span className="font-normal text-muted">· {step.channel}</span></p>
-              <p className="text-xs text-muted">{step.delay_hours === 0 ? 'Sends immediately' : `${step.delay_hours}h after previous step`}{step.condition?.skip_if_stage_not ? ` · skipped unless client is in ${step.condition.skip_if_stage_not.replace(/_/g, ' ')}` : ''}</p>
+          <div key={step.id ?? i} className="flex flex-col items-center">
+            <div className="flex flex-col items-center py-1">
+              <div className="h-6 w-px bg-line" />
+              <span className="my-0.5 rounded-full border border-line bg-white px-2 py-0.5 text-[10px] text-muted">
+                {step.delay_hours === 0 ? 'immediately' : `+${step.delay_hours}h`}
+              </span>
+              <div className="h-6 w-px bg-line" />
             </div>
-            <button onClick={() => removeStep(i)} className="text-sm text-muted hover:text-ink">Remove</button>
+            <div
+              draggable
+              onDragStart={() => onDragStart(i)}
+              onDragOver={(e) => onDragOver(e, i)}
+              onDragEnd={onDragEnd}
+              className="flex w-80 cursor-grab items-center gap-3 rounded-card border border-line bg-white p-4 shadow-card active:cursor-grabbing"
+            >
+              <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${step.channel === 'email' ? 'bg-iris-tint text-iris' : 'bg-money-tint text-money-hover'}`}>
+                {step.channel === 'email' ? <Mail size={15} strokeWidth={1.75} /> : <MessageSquare size={15} strokeWidth={1.75} />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-ink">{step.message_templates?.name ?? 'Template'}</p>
+                <p className="truncate text-xs text-muted">
+                  Step {i + 1}, {step.channel}{step.condition?.skip_if_stage_not ? `, skipped unless in ${step.condition.skip_if_stage_not.replace(/_/g, ' ')}` : ''}
+                </p>
+              </div>
+              <button onClick={() => removeStep(i)} className="shrink-0 text-xs text-muted hover:text-terra">Remove</button>
+            </div>
           </div>
         ))}
 
+        {steps.length > 0 && (
+          <div className="flex flex-col items-center py-1">
+            <div className="h-6 w-px bg-line" />
+            <div className="mt-1 flex items-center gap-1.5 rounded-full border border-line bg-white px-3 py-1.5 text-xs text-muted">
+              <CheckCircle2 size={13} strokeWidth={1.75} className="text-money" /> Sequence complete
+            </div>
+          </div>
+        )}
+
         {steps.length === 0 && (
-          <div className="rounded-card border border-dashed border-line bg-white p-10 text-center text-sm text-muted">
+          <div className="mt-6 rounded-card border border-dashed border-line bg-white p-8 text-center text-sm text-muted">
             No steps yet. Add one below to start the sequence.
           </div>
         )}

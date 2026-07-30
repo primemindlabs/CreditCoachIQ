@@ -163,15 +163,11 @@ export interface CalendarEvent {
   startISO: string | null;
 }
 
-/** Lists the coach's own calendar events for today — used to fold external (non-portal-booked) appointments into the Today page. */
-export async function listTodayEvents(accessToken: string, calendarId: string): Promise<CalendarEvent[]> {
-  const now = new Date();
-  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
-  const dayEnd = new Date(now); dayEnd.setHours(23, 59, 59, 999);
-
+/** Lists the coach's own calendar events between two ISO timestamps, source shared by listTodayEvents (today's slice) and the Calendar page (a full week). */
+export async function listEventsInRange(accessToken: string, calendarId: string, startISO: string, endISO: string): Promise<CalendarEvent[]> {
   const url = new URL(`${CALENDAR_API}/calendars/${encodeURIComponent(calendarId)}/events`);
-  url.searchParams.set('timeMin', dayStart.toISOString());
-  url.searchParams.set('timeMax', dayEnd.toISOString());
+  url.searchParams.set('timeMin', startISO);
+  url.searchParams.set('timeMax', endISO);
   url.searchParams.set('singleEvents', 'true');
   url.searchParams.set('orderBy', 'startTime');
 
@@ -179,4 +175,12 @@ export async function listTodayEvents(accessToken: string, calendarId: string): 
   if (!res.ok) throw new Error(`Google Calendar list failed: ${res.status} ${await res.text()}`);
   const data = (await res.json()) as { items?: { id: string; summary?: string; start?: { dateTime?: string; date?: string } }[] };
   return (data.items ?? []).map((e) => ({ id: e.id, summary: e.summary ?? '(No title)', startISO: e.start?.dateTime ?? e.start?.date ?? null }));
+}
+
+/** Lists the coach's own calendar events for today — used to fold external (non-portal-booked) appointments into the Today page. */
+export async function listTodayEvents(accessToken: string, calendarId: string): Promise<CalendarEvent[]> {
+  const now = new Date();
+  const dayStart = new Date(now); dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(now); dayEnd.setHours(23, 59, 59, 999);
+  return listEventsInRange(accessToken, calendarId, dayStart.toISOString(), dayEnd.toISOString());
 }

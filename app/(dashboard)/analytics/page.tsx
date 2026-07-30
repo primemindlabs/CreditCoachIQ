@@ -1,6 +1,10 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import BarChart from '@/components/ui/BarChart';
+import Funnel from '@/components/ui/Funnel';
+import ProgressBar from '@/components/ui/ProgressBar';
+import { SkeletonCards } from '@/components/ui/Skeleton';
 
 interface AnalyticsData {
   revenue: { mrr: number; activeSubscriptions: number; error?: string };
@@ -11,6 +15,7 @@ interface AnalyticsData {
     paidThisMonth: number; pendingPayout: number; ytdEarnings: number;
     byPartner: { referralPartnerId: string; partnerName: string; paid: number; pending: number }[];
   };
+  trends: { months: string[]; newEnrollments: number[]; clientsFunded: number[]; commissionsPaid: number[] };
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -21,6 +26,8 @@ const STAGE_LABELS: Record<string, string> = {
   paused: 'Paused',
   exited: 'Exited',
 };
+
+const PIPELINE_ORDER = ['credit_coaching', 'credit_stacking', 'loan_ready', 'handed_off'];
 
 interface ProductionGoal {
   id: string; profileId: string | null; profileName: string | null;
@@ -128,7 +135,15 @@ export default function AnalyticsPage() {
     loadGoals();
   }
 
-  if (loading) return <p className="text-sm text-muted">Loading…</p>;
+  if (loading) {
+    return (
+      <div>
+        <h1 className="mb-8 text-[26px] font-medium text-ink">Analytics</h1>
+        <div className="mb-4"><SkeletonCards count={3} /></div>
+        <div className="mb-8"><SkeletonCards count={3} /></div>
+      </div>
+    );
+  }
   if (error) return <p className="text-sm text-terra">{error}</p>;
   if (!data) return null;
 
@@ -141,6 +156,24 @@ export default function AnalyticsPage() {
         <Card label="Commissions paid this month" value={currency(data.commissions.paidThisMonth)} />
         <Card label="Pending payout" value={currency(data.commissions.pendingPayout)} />
         <Card label="YTD commission earnings" value={currency(data.commissions.ytdEarnings)} />
+      </div>
+
+      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="rounded-card border border-line bg-white p-6">
+          <p className="mb-1 text-sm font-medium text-ink">New enrollments</p>
+          <p className="mb-3 text-xs text-muted">Last 6 months</p>
+          <BarChart labels={data.trends.months} values={data.trends.newEnrollments} color="#6C5CE7" />
+        </div>
+        <div className="rounded-card border border-line bg-white p-6">
+          <p className="mb-1 text-sm font-medium text-ink">Clients funded</p>
+          <p className="mb-3 text-xs text-muted">Last 6 months</p>
+          <BarChart labels={data.trends.months} values={data.trends.clientsFunded} color="#0F9D58" />
+        </div>
+        <div className="rounded-card border border-line bg-white p-6">
+          <p className="mb-1 text-sm font-medium text-ink">Commissions paid</p>
+          <p className="mb-3 text-xs text-muted">Last 6 months</p>
+          <BarChart labels={data.trends.months} values={data.trends.commissionsPaid} color="#C9A05C" formatValue={(v) => currency(v)} />
+        </div>
       </div>
 
       <div className="mb-8 rounded-card border border-line bg-white p-6">
@@ -172,23 +205,16 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="mb-8 rounded-card border border-line bg-white p-6">
-        <p className="mb-4 text-sm font-medium text-ink">Clients by stage</p>
-        <div className="space-y-3">
-          {Object.entries(data.outcomes.byStage).map(([stage, count]) => {
-            const pct = data.outcomes.totalClients > 0 ? Math.round((count / data.outcomes.totalClients) * 100) : 0;
-            return (
-              <div key={stage}>
-                <div className="mb-1 flex justify-between text-sm">
-                  <span className="text-ink">{STAGE_LABELS[stage] ?? stage}</span>
-                  <span className="text-muted">{count} ({pct}%)</span>
-                </div>
-                <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                  <div className="h-full rounded-full bg-money" style={{ width: `${pct}%` }} />
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <p className="mb-1 text-sm font-medium text-ink">Pipeline funnel</p>
+        <p className="mb-4 text-xs text-muted">Clients currently at each stage, forward progression only. Paused and exited clients aren&apos;t part of the funnel flow.</p>
+        <Funnel
+          stages={PIPELINE_ORDER.map((stage) => ({ label: STAGE_LABELS[stage], count: data.outcomes.byStage[stage] ?? 0 }))}
+        />
+        {((data.outcomes.byStage.paused ?? 0) > 0 || (data.outcomes.byStage.exited ?? 0) > 0) && (
+          <p className="mt-4 border-t border-line pt-3 text-xs text-muted">
+            {data.outcomes.byStage.paused ?? 0} paused, {data.outcomes.byStage.exited ?? 0} exited.
+          </p>
+        )}
       </div>
 
       <div className="mb-8 rounded-card border border-line bg-white p-6">
@@ -219,25 +245,18 @@ export default function AnalyticsPage() {
           <p className="mb-4 text-sm text-muted">No goals set yet.</p>
         ) : (
           <div className="mb-5 space-y-4">
-            {goals.map((g) => {
-              const pct = g.targetValue > 0 ? Math.min(100, Math.round((g.actual / g.targetValue) * 100)) : 0;
-              return (
-                <div key={g.id}>
-                  <div className="mb-1 flex items-center justify-between text-sm">
-                    <span className="text-ink">
-                      {METRIC_LABEL[g.metric]} · {g.profileName ?? 'Org-wide'} · {g.period} (from {g.periodStart})
-                    </span>
-                    <span className="flex items-center gap-2 text-muted">
-                      {g.actual} / {g.targetValue}
-                      <button onClick={() => removeGoal(g.id)} className="text-muted hover:text-terra" title="Delete goal">×</button>
-                    </span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
-                    <div className={`h-full rounded-full ${pct >= 100 ? 'bg-money' : 'bg-iris'}`} style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              );
-            })}
+            {goals.map((g) => (
+              <div key={g.id}>
+                <ProgressBar
+                  value={g.actual}
+                  target={g.targetValue}
+                  accent="iris"
+                  label={`${METRIC_LABEL[g.metric]} · ${g.profileName ?? 'Org-wide'} · ${g.period} (from ${g.periodStart})`}
+                  sub={`${g.actual} / ${g.targetValue}`}
+                />
+                <button onClick={() => removeGoal(g.id)} className="mt-1 text-xs text-muted hover:text-terra">Delete goal</button>
+              </div>
+            ))}
           </div>
         )}
         <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-5">

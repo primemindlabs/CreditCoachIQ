@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import StatCard from '@/components/ui/StatCard';
+import RadialProgress from '@/components/ui/RadialProgress';
 
 interface BusinessProfile {
   id: string; entity_name: string; entity_type: string | null; ein: string | null;
@@ -54,6 +55,10 @@ export default function ClientStackingPanel({ borrowerId, planTier }: { borrower
   const [planError, setPlanError] = useState<string | null>(null);
 
   const [appForms, setAppForms] = useState<Record<string, { lenderName: string; productName: string }>>({});
+  const [editingAppId, setEditingAppId] = useState<string | null>(null);
+  const [editApp, setEditApp] = useState({ status: '', approvedLimit: '', promoAprMonths: '', promoAprEndsAt: '', standardApr: '', denialReason: '' });
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
   const [appSavingPlanId, setAppSavingPlanId] = useState<string | null>(null);
 
   const loadDetail = useCallback(async () => {
@@ -198,35 +203,61 @@ export default function ClientStackingPanel({ borrowerId, planTier }: { borrower
     }
   }
 
-  async function updateApplicationStatus(app: Application, status: string) {
-    let promoApr: string | undefined;
-    let approvedLimit: number | undefined;
-    if (status === 'active') {
-      const ends = window.prompt('Promo APR end date (YYYY-MM-DD). Required to disclose deferred-interest terms.');
-      if (!ends) return;
-      promoApr = ends;
-      const limitStr = window.prompt('Approved limit ($). Optional, leave blank to skip.', app.approved_limit ? String(app.approved_limit) : '');
-      if (limitStr && !Number.isNaN(Number(limitStr))) approvedLimit = Number(limitStr);
+  function startEditApp(app: Application) {
+    setEditingAppId(app.id);
+    setEditError(null);
+    setEditApp({
+      status: app.status,
+      approvedLimit: app.approved_limit != null ? String(app.approved_limit) : '',
+      promoAprMonths: app.promo_apr_months != null ? String(app.promo_apr_months) : '',
+      promoAprEndsAt: app.promo_apr_ends_at ?? '',
+      standardApr: app.standard_apr != null ? String(app.standard_apr) : '',
+      denialReason: app.denial_reason ?? '',
+    });
+  }
+
+  function cancelEditApp() {
+    setEditingAppId(null);
+    setEditError(null);
+  }
+
+  // Inline edit replaces the old window.prompt flow — a coach records what a
+  // client actually qualifies for or got approved for directly on the
+  // application row, not through a browser dialog. Same deferred-interest
+  // disclosure rule as before: promo_apr_ends_at is required client-side too
+  // (not just server-side) so the error shows up right where they're editing.
+  async function saveEditApp(appId: string) {
+    if (editApp.status === 'active' && !editApp.promoAprEndsAt) {
+      setEditError('Promo APR end date is required to mark an application active (deferred-interest disclosure).');
+      return;
     }
+    setEditSaving(true);
+    setEditError(null);
     try {
       const res = await fetch('/api/stacking/applications', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          id: app.id,
-          status,
-          ...(promoApr ? { promo_apr_ends_at: promoApr } : {}),
-          ...(approvedLimit !== undefined ? { approved_limit: approvedLimit } : {}),
+          id: appId,
+          status: editApp.status,
+          approved_limit: editApp.approvedLimit ? Number(editApp.approvedLimit) : null,
+          promo_apr_months: editApp.promoAprMonths ? Number(editApp.promoAprMonths) : null,
+          promo_apr_ends_at: editApp.promoAprEndsAt || null,
+          standard_apr: editApp.standardApr ? Number(editApp.standardApr) : null,
+          denial_reason: editApp.denialReason || null,
         }),
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        setPlanError(d.error ?? `Could not update that application (${res.status}).`);
+        setEditError(d.error ?? `Could not save that application (${res.status}).`);
         return;
       }
+      setEditingAppId(null);
       loadDetail();
     } catch {
-      setPlanError('Could not reach the server.');
+      setEditError('Could not reach the server.');
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -346,32 +377,90 @@ export default function ClientStackingPanel({ borrowerId, planTier }: { borrower
           <p className="text-sm text-muted">No funding plans yet. Generate one above.</p>
         ) : (
           <div className="space-y-6">
-            {plans.map((plan) => (
+            {plans.map((plan) => {
+              const planApproved = plan.credit_stack_applications
+                .filter((a) => a.status === 'active' && a.approved_limit)
+                .reduce((sum, a) => sum + (a.approved_limit ?? 0), 0);
+              return (
               <div key={plan.id} className="rounded-control border border-line p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-sm text-ink">{currency(plan.target_capital)} target, {new Date(plan.created_at).toLocaleDateString()}</p>
+                <div className="mb-3 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <RadialProgress value={planApproved} target={plan.target_capital} size={44} centerLabel={`${plan.target_capital > 0 ? Math.min(100, Math.round((planApproved / plan.target_capital) * 100)) : 0}%`} />
+                    <p className="text-sm text-ink">{currency(planApproved)} of {currency(plan.target_capital)} target, {new Date(plan.created_at).toLocaleDateString()}</p>
+                  </div>
                   <span className="rounded-full bg-line px-2.5 py-1 text-xs font-medium text-muted">{plan.status}</span>
                 </div>
 
                 {plan.credit_stack_applications.length > 0 && (
                   <div className="mb-3 space-y-2">
                     {plan.credit_stack_applications.map((app) => (
-                      <div key={app.id} className="flex items-center justify-between gap-2 border-b border-line pb-2 text-sm last:border-0 last:pb-0">
-                        <div>
-                          <p className="text-ink">{app.lender_name}{app.product_name ? `, ${app.product_name}` : ''}</p>
-                          <p className="text-xs text-muted">
-                            {app.approved_limit ? `${currency(app.approved_limit)} approved` : ''}
-                            {app.promo_apr_ends_at ? `, promo ends ${app.promo_apr_ends_at}` : ''}
-                            {app.denial_reason ? `, ${app.denial_reason}` : ''}
-                          </p>
-                        </div>
-                        <select
-                          value={app.status}
-                          onChange={(e) => updateApplicationStatus(app, e.target.value)}
-                          className="shrink-0 rounded-control border border-line px-2 py-1 text-xs text-ink"
-                        >
-                          {APP_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
-                        </select>
+                      <div key={app.id} className="border-b border-line pb-2 text-sm last:border-0 last:pb-0">
+                        {editingAppId === app.id ? (
+                          <div className="rounded-control bg-paper p-3">
+                            <p className="mb-2 text-ink">{app.lender_name}{app.product_name ? `, ${app.product_name}` : ''}</p>
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                              <select value={editApp.status} onChange={(e) => setEditApp({ ...editApp, status: e.target.value })} className="rounded-control border border-line px-2 py-1.5 text-xs text-ink">
+                                {APP_STATUSES.map((s) => <option key={s} value={s}>{STATUS_LABEL[s]}</option>)}
+                              </select>
+                              <input
+                                value={editApp.approvedLimit}
+                                onChange={(e) => setEditApp({ ...editApp, approvedLimit: e.target.value })}
+                                placeholder="Approved limit ($)"
+                                type="number"
+                                className="rounded-control border border-line px-2 py-1.5 text-xs text-ink placeholder:text-muted"
+                              />
+                              <input
+                                value={editApp.standardApr}
+                                onChange={(e) => setEditApp({ ...editApp, standardApr: e.target.value })}
+                                placeholder="Standard APR (%)"
+                                type="number"
+                                className="rounded-control border border-line px-2 py-1.5 text-xs text-ink placeholder:text-muted"
+                              />
+                              <input
+                                value={editApp.promoAprMonths}
+                                onChange={(e) => setEditApp({ ...editApp, promoAprMonths: e.target.value })}
+                                placeholder="Promo APR months"
+                                type="number"
+                                className="rounded-control border border-line px-2 py-1.5 text-xs text-ink placeholder:text-muted"
+                              />
+                              <div>
+                                <label className="mb-0.5 block text-[10px] text-muted">Promo APR ends{editApp.status === 'active' ? ' (required)' : ''}</label>
+                                <input
+                                  value={editApp.promoAprEndsAt}
+                                  onChange={(e) => setEditApp({ ...editApp, promoAprEndsAt: e.target.value })}
+                                  type="date"
+                                  className="w-full rounded-control border border-line px-2 py-1.5 text-xs text-ink"
+                                />
+                              </div>
+                              <input
+                                value={editApp.denialReason}
+                                onChange={(e) => setEditApp({ ...editApp, denialReason: e.target.value })}
+                                placeholder="Denial reason (if denied)"
+                                className="rounded-control border border-line px-2 py-1.5 text-xs text-ink placeholder:text-muted"
+                              />
+                            </div>
+                            {editError && <p className="mt-2 text-xs text-terra">{editError}</p>}
+                            <div className="mt-2 flex gap-2">
+                              <button onClick={() => saveEditApp(app.id)} disabled={editSaving} className="rounded-control bg-money px-3 py-1.5 text-xs font-medium text-white hover:bg-money-hover disabled:opacity-50">
+                                {editSaving ? 'Saving…' : 'Save'}
+                              </button>
+                              <button onClick={cancelEditApp} className="rounded-control border border-line px-3 py-1.5 text-xs text-ink">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => startEditApp(app)} className="flex w-full items-center justify-between gap-2 text-left hover:bg-paper">
+                            <div>
+                              <p className="text-ink">{app.lender_name}{app.product_name ? `, ${app.product_name}` : ''}</p>
+                              <p className="text-xs text-muted">
+                                {app.approved_limit ? `${currency(app.approved_limit)} approved` : 'Not yet approved'}
+                                {app.standard_apr ? `, ${app.standard_apr}% standard APR` : ''}
+                                {app.promo_apr_ends_at ? `, promo ends ${app.promo_apr_ends_at}` : ''}
+                                {app.denial_reason ? `, ${app.denial_reason}` : ''}
+                              </p>
+                            </div>
+                            <span className="shrink-0 rounded-full bg-line px-2.5 py-1 text-xs font-medium text-muted">{STATUS_LABEL[app.status] ?? app.status}</span>
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -399,7 +488,8 @@ export default function ClientStackingPanel({ borrowerId, planTier }: { borrower
                   </button>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

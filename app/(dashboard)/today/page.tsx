@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import Link from 'next/link';
 import { CheckSquare, Phone, MessageCircle, AlertTriangle, CreditCard, UserPlus } from 'lucide-react';
 import StatCard from '@/components/ui/StatCard';
+import { Skeleton, SkeletonCards, SkeletonRows } from '@/components/ui/Skeleton';
 
 interface BorrowerRef { first_name: string; last_name: string }
 interface TaskItem { id: string; type: string | null; title: string; due_date: string | null; borrower_id: string | null; borrowers: BorrowerRef | null }
@@ -82,8 +83,16 @@ export default function TodayPage() {
 
   if (loading || !data) {
     return (
-      <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-sm text-muted">Loading…</p>
+      <div>
+        <div className="mb-8 border-b border-line pb-8">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="mt-3 h-9 w-72" />
+          <Skeleton className="mt-4 h-4 w-96" />
+        </div>
+        <div className="mb-8">
+          <SkeletonCards count={5} cols={5} />
+        </div>
+        <SkeletonRows count={3} />
       </div>
     );
   }

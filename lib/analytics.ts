@@ -291,6 +291,65 @@ export async function computeProductionGoals(sb: SupabaseClient, orgId: string):
   return results;
 }
 
+export interface MonthlyTrends {
+  months: string[]; // 'YYYY-MM', oldest first, 6 months
+  newEnrollments: number[];
+  clientsFunded: number[];
+  commissionsPaid: number[];
+}
+
+function last6MonthStarts(): Date[] {
+  const now = new Date();
+  const starts: Date[] = [];
+  for (let i = 5; i >= 0; i--) starts.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
+  return starts;
+}
+
+function monthLabel(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Last 6 months of the three series that already have real, populated
+ * timestamp columns to bucket by (enrollment creation, funding outcome, paid
+ * commission events). Deliberately doesn't chart average score over time:
+ * credit_repair_enrollments.score_history exists in the schema but nothing
+ * in the app writes to it yet, so there's no real data to plot there without
+ * inventing it. Charting only what's genuinely tracked.
+ */
+export async function computeMonthlyTrends(sb: SupabaseClient, orgId: string): Promise<MonthlyTrends> {
+  const starts = last6MonthStarts();
+  const rangeStart = starts[0];
+
+  const [{ data: enrollments }, { data: funded }, { data: commissionEvents }] = await Promise.all([
+    sb.from('credit_repair_enrollments').select('created_at').eq('org_id', orgId).gte('created_at', rangeStart.toISOString()),
+    sb.from('borrowers').select('funding_status_updated_at').eq('org_id', orgId).eq('funding_status', 'funded').gte('funding_status_updated_at', rangeStart.toISOString()),
+    sb.from('referral_commission_events').select('created_at, amount, event_type').eq('org_id', orgId).eq('event_type', 'commission_paid').gte('created_at', rangeStart.toISOString()),
+  ]);
+
+  const months = starts.map(monthLabel);
+  const bucket = (dates: string[]): number[] => {
+    const counts = new Map(months.map((m) => [m, 0]));
+    for (const d of dates) {
+      const key = monthLabel(new Date(d));
+      if (counts.has(key)) counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    return months.map((m) => counts.get(m) ?? 0);
+  };
+
+  const newEnrollments = bucket((enrollments ?? []).map((e) => e.created_at as string));
+  const clientsFunded = bucket((funded ?? []).map((b) => b.funding_status_updated_at as string).filter(Boolean));
+
+  const commissionSums = new Map(months.map((m) => [m, 0]));
+  for (const e of commissionEvents ?? []) {
+    const key = monthLabel(new Date(e.created_at as string));
+    if (commissionSums.has(key)) commissionSums.set(key, (commissionSums.get(key) ?? 0) + (Number(e.amount) || 0));
+  }
+  const commissionsPaid = months.map((m) => Math.round((commissionSums.get(m) ?? 0) * 100) / 100);
+
+  return { months, newEnrollments, clientsFunded, commissionsPaid };
+}
+
 export interface HandoffConversion {
   handoffsSent: number;
   funded: number;

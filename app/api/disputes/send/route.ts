@@ -33,7 +33,7 @@ export const POST = withErrorHandling(async function POST(req: Request) {
   if (!disputes?.length) return NextResponse.json({ error: 'No pending disputes found' }, { status: 404 });
 
   const branding = await getOrgBranding(orgId);
-  const results: Array<{ disputeId: string; status: string; lobId?: string; error?: string }> = [];
+  const results: Array<{ disputeId: string; status: string; lobId?: string; error?: string; mocked?: boolean }> = [];
 
   for (const dispute of disputes) {
     const send = await sendCertifiedLetter({
@@ -64,10 +64,11 @@ export const POST = withErrorHandling(async function POST(req: Request) {
     }).eq('id', dispute.id);
 
     await sb.from('credit_tradelines').update({ dispute_status: 'letter_sent' }).eq('id', dispute.tradeline_id);
-    results.push({ disputeId: dispute.id as string, status: 'sent', lobId: send.lobId });
+    results.push({ disputeId: dispute.id as string, status: 'sent', lobId: send.lobId, mocked: send.mocked });
   }
 
   const sentCount = results.filter((r) => r.status === 'sent').length;
+  const mockedCount = results.filter((r) => r.mocked).length;
   if (sentCount > 0 && disputes[0]) {
     // Log a coach task as a lightweight activity record — no dedicated activity-log table on this side yet.
     const { data: enrollment } = await sb.from('credit_repair_enrollments').select('borrower_id').eq('id', disputes[0].enrollment_id).maybeSingle();
@@ -80,5 +81,5 @@ export const POST = withErrorHandling(async function POST(req: Request) {
     }
   }
 
-  return NextResponse.json({ results });
+  return NextResponse.json({ results, mockedCount });
 });
