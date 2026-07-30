@@ -14,7 +14,7 @@ export const GET = withErrorHandling(async function GET(_req: Request, { params 
 
   const sb = createAdminClient();
   const [{ data: borrower }, { data: enrollment }, { data: goals }, { data: tasks }, { data: recentCalls }] = await Promise.all([
-    sb.from('borrowers').select('id, first_name, last_name, email, phone, plan_tier, journey_stage, journey_stage_updated_at, state, funding_status, assigned_agent_id, referred_by_partner_id, lead_status, interest_level').eq('id', params.borrowerId).eq('org_id', orgId).maybeSingle(),
+    sb.from('borrowers').select('id, first_name, last_name, email, phone, plan_tier, journey_stage, journey_stage_updated_at, state, funding_status, assigned_agent_id, referred_by_partner_id, lead_status, interest_level, coach_notes').eq('id', params.borrowerId).eq('org_id', orgId).maybeSingle(),
     sb.from('credit_repair_enrollments').select('id, status, target_score, current_score_exp, current_score_eqx, current_score_tu, croa_disclosure_signed_at, mortgage_ready_at').eq('borrower_id', params.borrowerId).eq('org_id', orgId).maybeSingle(),
     sb.from('financial_goals').select('id, title, target_amount, current_amount, status').eq('borrower_id', params.borrowerId).eq('org_id', orgId).order('created_at', { ascending: false }).limit(5),
     sb.from('coach_tasks').select('id, type, title, due_date, completed_at').eq('borrower_id', params.borrowerId).eq('org_id', orgId).is('completed_at', null).order('due_date', { ascending: true }).limit(10),
@@ -55,4 +55,21 @@ export const GET = withErrorHandling(async function GET(_req: Request, { params 
     referralPartnerName,
     scoreHistory,
   });
+});
+
+// Save the freeform coach-notes scratchpad. Separate from the
+// status/interest-level PATCH on /api/leads/[id] — this exists for both
+// leads and enrolled clients, not just the pre-conversion pipeline.
+export const PATCH = withErrorHandling(async function PATCH(req: Request, { params }: { params: { borrowerId: string } }) {
+  const { orgId } = await getOrgContext();
+  if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const body = (await req.json().catch(() => ({}))) as { coachNotes?: string };
+  if (typeof body.coachNotes !== 'string') return NextResponse.json({ error: 'coachNotes (string) is required' }, { status: 400 });
+
+  const sb = createAdminClient();
+  const { error } = await sb.from('borrowers').update({ coach_notes: body.coachNotes }).eq('id', params.borrowerId).eq('org_id', orgId);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
 });

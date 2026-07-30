@@ -5,12 +5,14 @@ import { Phone, RefreshCw, ShieldOff, Sparkles, MessageSquare, UserCheck } from 
 import RadialScore from '@/components/ui/RadialScore';
 import Sparkline from '@/components/ui/Sparkline';
 import StatCard from '@/components/ui/StatCard';
+import JourneyRoadmap from '@/components/ui/JourneyRoadmap';
+import ActivityTimeline from '@/components/ui/ActivityTimeline';
 
 interface ClientDetail {
   borrower: {
     id: string; first_name: string; last_name: string; email: string | null; phone: string | null;
     plan_tier: string; journey_stage: string; state: string | null; funding_status: string | null;
-    lead_status: string; interest_level: string | null;
+    lead_status: string; interest_level: string | null; coach_notes: string | null;
   };
   enrollment: {
     id: string; status: string; target_score: number; current_score_exp: number | null; current_score_eqx: number | null; current_score_tu: number | null;
@@ -26,6 +28,14 @@ interface ClientDetail {
 interface StackSummary { capitalAvailable: number; activeApplicationCount: number; expiringWithin30Days: { lender_name: string }[]; }
 interface Dispute { id: string; bureau: string; letter_body: string; sent_at: string | null; response_status: string; credit_tradelines: { creditor_name: string } | null; }
 interface SmsMessage { id: string; direction: 'inbound' | 'outbound'; body: string; status: string; created_at: string; }
+interface ActivityItem {
+  id: string;
+  type: 'stage_change' | 'note' | 'call' | 'sms' | 'email' | 'portal_message' | 'status_change';
+  label: string;
+  detail: string | null;
+  actor: string | null;
+  createdAt: string;
+}
 interface BillingInfo {
   configured: boolean;
   subscriptionStatus: string | null;
@@ -34,8 +44,6 @@ interface BillingInfo {
   paymentRetryCount: number;
   invoices: { id: string; number: string | null; status: string | null; amountDue: number; amountPaid: number; created: string; hostedInvoiceUrl: string | null }[];
 }
-
-const STAGES = ['credit_coaching', 'credit_stacking', 'loan_ready', 'handed_off', 'paused', 'exited'];
 
 function currency(n: number): string {
   return (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
@@ -60,25 +68,68 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   const [smsSending, setSmsSending] = useState(false);
   const [converting, setConverting] = useState(false);
   const [callNoteDrafts, setCallNoteDrafts] = useState<Record<string, string>>({});
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activityLoading, setActivityLoading] = useState(true);
+  const [notesDraft, setNotesDraft] = useState('');
+  const [notesSaving, setNotesSaving] = useState(false);
+  const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
+  const [notesError, setNotesError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const detail = await fetch(`/api/coach/client/${borrowerId}`).then((r) => r.json());
-    setData(detail);
-    const [disputesRes, stackData, billingData, smsData] = await Promise.all([
-      detail.enrollment ? fetch(`/api/disputes?enrollment_id=${detail.enrollment.id}`).then((r) => r.json()) : Promise.resolve({ disputes: [] }),
-      fetch(`/api/stacking/summary?borrower_id=${borrowerId}`).then((r) => r.json()),
-      fetch(`/api/billing/invoices?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : null)),
-      fetch(`/api/coach/sms?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] })),
-    ]);
-    setDisputes(disputesRes.disputes ?? []);
-    setStack(stackData);
-    setBilling(billingData);
-    setSmsMessages(smsData.messages ?? []);
-    setLoading(false);
+    setActivityLoading(true);
+    try {
+      const res = await fetch(`/api/coach/client/${borrowerId}`);
+      if (!res.ok) {
+        setLoading(false);
+        setActivityLoading(false);
+        return;
+      }
+      const detail = await res.json();
+      setData(detail);
+      setNotesDraft(detail.borrower?.coach_notes ?? '');
+      const [disputesRes, stackData, billingData, smsData, activityData] = await Promise.all([
+        detail.enrollment ? fetch(`/api/disputes?enrollment_id=${detail.enrollment.id}`).then((r) => r.json()) : Promise.resolve({ disputes: [] }),
+        fetch(`/api/stacking/summary?borrower_id=${borrowerId}`).then((r) => r.json()),
+        fetch(`/api/billing/invoices?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : null)),
+        fetch(`/api/coach/sms?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] })),
+        fetch(`/api/coach/client/${borrowerId}/activity`).then((r) => (r.ok ? r.json() : { items: [] })),
+      ]);
+      setDisputes(disputesRes.disputes ?? []);
+      setStack(stackData);
+      setBilling(billingData);
+      setSmsMessages(smsData.messages ?? []);
+      setActivity(activityData.items ?? []);
+    } finally {
+      setLoading(false);
+      setActivityLoading(false);
+    }
   }, [borrowerId]);
 
   useEffect(() => { load(); }, [load]);
+
+  async function saveNotes() {
+    setNotesSaving(true);
+    setNotesError(null);
+    try {
+      const res = await fetch(`/api/coach/client/${borrowerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coachNotes: notesDraft }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setNotesError(d.error ?? `Could not save notes (${res.status}).`);
+        return;
+      }
+      setNotesSavedAt(Date.now());
+      setData((prev) => (prev ? { ...prev, borrower: { ...prev.borrower, coach_notes: notesDraft } } : prev));
+    } catch {
+      setNotesError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setNotesSaving(false);
+    }
+  }
 
   async function loadCallBrief() {
     setCallBriefLoading(true);
@@ -101,18 +152,23 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
 
   async function changeStage(toStage: string) {
     setStageBusy(true);
-    const res = await fetch('/api/journey/transition', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ borrower_id: borrowerId, to_stage: toStage }),
-    });
-    setStageBusy(false);
-    if (!res.ok) {
-      const d = await res.json();
-      setPortalMsg(d.error);
-      return;
+    try {
+      const res = await fetch('/api/journey/transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrower_id: borrowerId, to_stage: toStage }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not update stage (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setStageBusy(false);
     }
-    load();
   }
 
   async function portalAction(action: 'revoke' | 'reissue') {
@@ -231,11 +287,20 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
 
   async function convertLead() {
     setConverting(true);
-    const res = await fetch(`/api/leads/${borrowerId}/convert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-    const d = await res.json();
-    setConverting(false);
-    setPortalMsg(res.ok ? 'Converted to enrolled client.' : (d.error ?? 'Could not convert.'));
-    load();
+    try {
+      const res = await fetch(`/api/leads/${borrowerId}/convert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not convert (${res.status}).`);
+        return;
+      }
+      setPortalMsg('Converted to enrolled client.');
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setConverting(false);
+    }
   }
 
   if (loading || !data) {
@@ -302,25 +367,46 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         </div>
       </div>
 
+      {/* Coach notes — freeform scratchpad, distinct from per-call notes and the activity log below. */}
       <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
-        <p className="mb-3 text-sm font-medium text-ink">Journey stage</p>
-        <div className="flex flex-wrap gap-2">
-          {STAGES.map((s) => (
+        <div className="mb-3 flex items-center justify-between">
+          <p className="text-sm font-medium text-ink">Notes</p>
+          <div className="flex items-center gap-2">
+            {notesSavedAt && !notesSaving && Date.now() - notesSavedAt < 4000 && <span className="text-xs text-money">Saved</span>}
             <button
-              key={s}
-              onClick={() => changeStage(s)}
-              disabled={stageBusy || s === borrower.journey_stage}
-              className={`rounded-control border px-3 py-1.5 text-xs ${s === borrower.journey_stage ? 'border-money bg-money-tint text-money-hover' : 'border-line text-ink hover:border-ink/30'}`}
+              onClick={saveNotes}
+              disabled={notesSaving || notesDraft === (borrower.coach_notes ?? '')}
+              className="rounded-control border border-line px-3 py-1.5 text-xs text-ink hover:border-ink/30 disabled:opacity-50"
             >
-              {s.replace('_', ' ')}
+              {notesSaving ? 'Saving…' : 'Save'}
             </button>
-          ))}
+          </div>
         </div>
+        <textarea
+          value={notesDraft}
+          onChange={(e) => setNotesDraft(e.target.value)}
+          placeholder="What's actually going on with this person — context that doesn't belong to any one call."
+          rows={3}
+          className="w-full resize-y rounded-control border border-line px-3 py-2 text-sm text-ink placeholder:text-muted"
+        />
+        {notesError && <p className="mt-2 text-xs text-terra">{notesError}</p>}
       </div>
 
-      <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <StatCard label="Stacked capital" value={stack ? currency(stack.capitalAvailable) : '—'} sub={`${stack?.activeApplicationCount ?? 0} active lines`} accent="money" />
-        <StatCard label="Funding status" value={borrower.funding_status ?? '—'} accent="gold" />
+      <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
+        <p className="mb-5 text-sm font-medium text-ink">Journey stage</p>
+        <JourneyRoadmap stage={borrower.journey_stage} busy={stageBusy} onChange={changeStage} />
+      </div>
+
+      {enrollment && (
+        <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <StatCard label="Stacked capital" value={stack ? currency(stack.capitalAvailable) : '—'} sub={`${stack?.activeApplicationCount ?? 0} active lines`} accent="money" />
+          <StatCard label="Funding status" value={borrower.funding_status ?? '—'} accent="gold" />
+        </div>
+      )}
+
+      <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
+        <p className="mb-5 text-sm font-medium text-ink">Activity</p>
+        <ActivityTimeline items={activity} loading={activityLoading} />
       </div>
 
       {enrollment && (

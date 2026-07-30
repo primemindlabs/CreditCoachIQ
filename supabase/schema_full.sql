@@ -610,7 +610,11 @@ ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS sms_consent boolean NOT NULL DEFA
 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS sms_consent_at timestamptz;
 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS email_opt_out boolean NOT NULL DEFAULT false;
 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS sms_opt_out boolean NOT NULL DEFAULT false;
-ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS unsubscribe_token text UNIQUE DEFAULT encode(gen_random_bytes(24), 'base64url');
+-- 'base64url' is not a valid Postgres encode() type (Node.js Buffer has it,
+-- Postgres doesn't) — this line originally shipped broken; see migration
+-- 0014 for the incident and the fix. Kept correct here so a fresh DB setup
+-- from this file doesn't reintroduce the bug.
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS unsubscribe_token text UNIQUE DEFAULT rtrim(translate(encode(gen_random_bytes(24), 'base64'), '+/', '-_'), '=');
 
 CREATE TABLE IF NOT EXISTS message_templates (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1181,3 +1185,6 @@ CREATE POLICY "sms_messages_org" ON sms_messages FOR ALL
 CREATE POLICY "sms_messages_service_all" ON sms_messages FOR ALL USING (true) WITH CHECK (true);
 
 ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS notes text;
+
+-- 0015_coach_notes_activity.sql
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS coach_notes text;
