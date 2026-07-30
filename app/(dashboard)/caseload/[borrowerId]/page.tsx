@@ -742,7 +742,7 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
                 <Sparkles size={14} strokeWidth={1.75} /> {callBriefLoading ? 'Writing…' : 'Call prep brief'}
               </button>
               {!enrollment && (
-                <button onClick={convertLead} disabled={converting} className="flex items-center gap-1.5 rounded-control bg-money px-3.5 py-2 text-sm font-medium text-white hover:bg-money-hover disabled:opacity-60">
+                <button onClick={() => convertLead()} disabled={converting} className="flex items-center gap-1.5 rounded-control bg-money px-3.5 py-2 text-sm font-medium text-white hover:bg-money-hover disabled:opacity-60">
                   <UserCheck size={14} strokeWidth={1.75} /> {converting ? 'Converting…' : 'Convert to client'}
                 </button>
               )}
