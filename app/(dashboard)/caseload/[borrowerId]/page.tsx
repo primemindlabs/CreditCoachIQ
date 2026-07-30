@@ -49,6 +49,16 @@ function currency(n: number): string {
   return (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
 
+const FUNDING_STATUSES = [
+  { value: 'pre_qual', label: 'Pre-qual' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'underwriting', label: 'Underwriting' },
+  { value: 'clear_to_close', label: 'Clear to close' },
+  { value: 'funded', label: 'Funded' },
+  { value: 'declined', label: 'Declined' },
+  { value: 'withdrawn', label: 'Withdrawn' },
+] as const;
+
 export default function ClientDetailPage({ params }: { params: { borrowerId: string } }) {
   const { borrowerId } = params;
   const [data, setData] = useState<ClientDetail | null>(null);
@@ -58,6 +68,7 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   const [loading, setLoading] = useState(true);
   const [callStatus, setCallStatus] = useState<string | null>(null);
   const [stageBusy, setStageBusy] = useState(false);
+  const [fundingBusy, setFundingBusy] = useState(false);
   const [portalMsg, setPortalMsg] = useState<string | null>(null);
   const [callBrief, setCallBrief] = useState<string | null>(null);
   const [callBriefLoading, setCallBriefLoading] = useState(false);
@@ -74,6 +85,10 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSavedAt, setNotesSavedAt] = useState<number | null>(null);
   const [notesError, setNotesError] = useState<string | null>(null);
+  const [taskTitle, setTaskTitle] = useState('');
+  const [taskDueDate, setTaskDueDate] = useState('');
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -168,6 +183,76 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       setPortalMsg('Could not reach the server. Check your connection and try again.');
     } finally {
       setStageBusy(false);
+    }
+  }
+
+  async function changeFundingStatus(toStatus: string) {
+    setFundingBusy(true);
+    try {
+      const res = await fetch(`/api/coach/client/${borrowerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fundingStatus: toStatus }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not update funding status (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setFundingBusy(false);
+    }
+  }
+
+  async function addTask() {
+    if (!taskTitle.trim()) return;
+    setTaskSaving(true);
+    try {
+      const res = await fetch('/api/coach/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrower_id: borrowerId, title: taskTitle.trim(), due_date: taskDueDate || undefined }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not add that task (${res.status}).`);
+        return;
+      }
+      setTaskTitle('');
+      setTaskDueDate('');
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setTaskSaving(false);
+    }
+  }
+
+  async function completeTask(id: string) {
+    setCompletingTaskIds((prev) => new Set(prev).add(id));
+    try {
+      const res = await fetch('/api/coach/tasks', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, completed: true }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not complete that task (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setCompletingTaskIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }
 
@@ -400,7 +485,20 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       {enrollment && (
         <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <StatCard label="Stacked capital" value={stack ? currency(stack.capitalAvailable) : '—'} sub={`${stack?.activeApplicationCount ?? 0} active lines`} accent="money" />
-          <StatCard label="Funding status" value={borrower.funding_status ?? '—'} accent="gold" />
+          <div className="rounded-card border border-line bg-white p-4 shadow-card">
+            <p className="text-[11px] uppercase tracking-wide text-muted">Funding status</p>
+            <select
+              value={borrower.funding_status ?? ''}
+              disabled={fundingBusy}
+              onChange={(e) => changeFundingStatus(e.target.value)}
+              className="figure mt-1.5 w-full rounded-control border border-line bg-white py-1 text-lg font-medium text-ink disabled:opacity-60"
+            >
+              <option value="" disabled>Not set</option>
+              {FUNDING_STATUSES.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          </div>
         </div>
       )}
 
@@ -490,16 +588,47 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         </div>
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
           <p className="mb-3 text-sm font-medium text-ink">Open tasks</p>
-          {data.openTasks.length === 0 ? <p className="text-sm text-muted">Nothing open.</p> : (
-            <div className="space-y-2">
+          {data.openTasks.length === 0 ? <p className="mb-3 text-sm text-muted">Nothing open.</p> : (
+            <div className="mb-3 space-y-2">
               {data.openTasks.map((t) => (
-                <div key={t.id} className="flex justify-between text-sm">
-                  <span className="text-ink">{t.title}</span>
-                  <span className="text-muted">{t.due_date}</span>
+                <div key={t.id} className="flex items-center justify-between gap-2 text-sm">
+                  <label className="flex items-center gap-2 text-ink">
+                    <input
+                      type="checkbox"
+                      checked={completingTaskIds.has(t.id)}
+                      disabled={completingTaskIds.has(t.id)}
+                      onChange={() => completeTask(t.id)}
+                      className="rounded border-line"
+                    />
+                    {t.title}
+                  </label>
+                  <span className="shrink-0 text-muted">{t.due_date}</span>
                 </div>
               ))}
             </div>
           )}
+          <div className="flex items-center gap-2 border-t border-line pt-3">
+            <input
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') addTask(); }}
+              placeholder="Add a task…"
+              className="min-w-0 flex-1 rounded-control border border-line px-2.5 py-1.5 text-sm text-ink placeholder:text-muted"
+            />
+            <input
+              type="date"
+              value={taskDueDate}
+              onChange={(e) => setTaskDueDate(e.target.value)}
+              className="figure w-[130px] shrink-0 rounded-control border border-line px-2 py-1.5 text-sm text-ink"
+            />
+            <button
+              onClick={addTask}
+              disabled={taskSaving || !taskTitle.trim()}
+              className="shrink-0 rounded-control border border-line px-3 py-1.5 text-sm text-ink hover:border-ink/30 disabled:opacity-60"
+            >
+              Add
+            </button>
+          </div>
         </div>
       </div>
 

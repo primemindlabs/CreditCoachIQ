@@ -109,7 +109,7 @@ export default function TodayPage() {
         <StatCard label="Calls this week" value={data.upcomingCalls.length} icon={<Phone size={16} strokeWidth={1.75} />} />
         <StatCard label="Unread messages" value={data.unreadMessages.length + data.unreadTexts.length} accent={(data.unreadMessages.length + data.unreadTexts.length) > 0 ? 'gold' : undefined} icon={<MessageCircle size={16} strokeWidth={1.75} />} />
         <StatCard label="Needs review" value={data.openComplaints.length + data.paymentFailures.length} accent={(data.openComplaints.length + data.paymentFailures.length) > 0 ? 'money' : undefined} icon={<AlertTriangle size={16} strokeWidth={1.75} />} />
-        <Link href="/leads" className="block transition-opacity hover:opacity-90">
+        <Link href="/caseload" className="block transition-opacity hover:opacity-90">
           <StatCard label="New leads" value={data.newLeadsCount} accent={data.newLeadsCount > 0 ? 'iris' : undefined} icon={<UserPlus size={16} strokeWidth={1.75} />} />
         </Link>
       </div>

@@ -29,8 +29,18 @@ export const POST = withErrorHandling(async function POST(req: Request) {
     borrower_id?: string; assigned_to?: string; title?: string; due_date?: string; type?: string;
   };
   if (!body.title) return NextResponse.json({ error: 'title required' }, { status: 400 });
+
+  // Default to the creating coach when no explicit assignee is given, so
+  // tasks don't silently land unassigned (and disappear from the default
+  // Today view, which filters to the current user unless ?all=true).
+  let assignedTo = body.assigned_to ?? null;
+  if (!assignedTo) {
+    const { data: profile } = await sb.from('profiles').select('id').eq('clerk_user_id', userId).maybeSingle();
+    assignedTo = (profile?.id as string) ?? null;
+  }
+
   const { data, error } = await sb.from('coach_tasks').insert({
-    org_id: orgId, borrower_id: body.borrower_id ?? null, assigned_to: body.assigned_to ?? null,
+    org_id: orgId, borrower_id: body.borrower_id ?? null, assigned_to: assignedTo,
     title: body.title, due_date: body.due_date ?? null, type: body.type ?? null, source: 'manual',
   }).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

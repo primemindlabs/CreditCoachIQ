@@ -57,18 +57,31 @@ export const GET = withErrorHandling(async function GET(_req: Request, { params 
   });
 });
 
-// Save the freeform coach-notes scratchpad. Separate from the
-// status/interest-level PATCH on /api/leads/[id] — this exists for both
-// leads and enrolled clients, not just the pre-conversion pipeline.
+const FUNDING_STATUSES = ['pre_qual', 'processing', 'underwriting', 'clear_to_close', 'funded', 'declined', 'withdrawn'];
+
+// Save the freeform coach-notes scratchpad and/or the manual funding-status
+// override. Separate from the status/interest-level PATCH on
+// /api/leads/[id] — this exists for both leads and enrolled clients, not
+// just the pre-conversion pipeline. funding_status is otherwise only ever
+// written by the AshleyIQ cross-company sync (/api/integrations/funding-
+// status-sync) — this is the manual fallback for orgs not running that
+// integration, or for correcting it.
 export const PATCH = withErrorHandling(async function PATCH(req: Request, { params }: { params: { borrowerId: string } }) {
   const { orgId } = await getOrgContext();
   if (!orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = (await req.json().catch(() => ({}))) as { coachNotes?: string };
-  if (typeof body.coachNotes !== 'string') return NextResponse.json({ error: 'coachNotes (string) is required' }, { status: 400 });
+  const body = (await req.json().catch(() => ({}))) as { coachNotes?: string; fundingStatus?: string };
+  const patch: Record<string, unknown> = {};
+  if (typeof body.coachNotes === 'string') patch.coach_notes = body.coachNotes;
+  if (typeof body.fundingStatus === 'string') {
+    if (!FUNDING_STATUSES.includes(body.fundingStatus)) return NextResponse.json({ error: 'Invalid funding status' }, { status: 400 });
+    patch.funding_status = body.fundingStatus;
+    patch.funding_status_updated_at = new Date().toISOString();
+  }
+  if (Object.keys(patch).length === 0) return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
 
   const sb = createAdminClient();
-  const { error } = await sb.from('borrowers').update({ coach_notes: body.coachNotes }).eq('id', params.borrowerId).eq('org_id', orgId);
+  const { error } = await sb.from('borrowers').update(patch).eq('id', params.borrowerId).eq('org_id', orgId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
