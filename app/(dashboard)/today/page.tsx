@@ -12,9 +12,13 @@ interface MessageItem { id: string; borrower_id: string; body: string; created_a
 interface ComplaintItem { id: string; borrower_id: string; category: string; status: string; opened_at: string; borrowers: BorrowerRef | null }
 interface PaymentItem { id: string; borrower_id: string; last_payment_failed_at: string; payment_retry_count: number; borrowers: BorrowerRef | null }
 
+interface ExternalEvent { id: string; summary: string; startISO: string | null }
+
 interface Today {
   tasks: TaskItem[];
+  todayCalls: CallItem[];
   upcomingCalls: CallItem[];
+  externalTodayEvents: ExternalEvent[];
   unreadMessages: MessageItem[];
   unreadTexts: MessageItem[];
   openComplaints: ComplaintItem[];
@@ -106,12 +110,36 @@ export default function TodayPage() {
 
       <div className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-5">
         <StatCard label="Open tasks" value={data.tasks.length} accent={data.tasks.length > 0 ? 'iris' : undefined} icon={<CheckSquare size={16} strokeWidth={1.75} />} />
-        <StatCard label="Calls this week" value={data.upcomingCalls.length} icon={<Phone size={16} strokeWidth={1.75} />} />
+        <StatCard label="Calls today" value={data.todayCalls.length} accent={data.todayCalls.length > 0 ? 'money' : undefined} icon={<Phone size={16} strokeWidth={1.75} />} />
         <StatCard label="Unread messages" value={data.unreadMessages.length + data.unreadTexts.length} accent={(data.unreadMessages.length + data.unreadTexts.length) > 0 ? 'gold' : undefined} icon={<MessageCircle size={16} strokeWidth={1.75} />} />
         <StatCard label="Needs review" value={data.openComplaints.length + data.paymentFailures.length} accent={(data.openComplaints.length + data.paymentFailures.length) > 0 ? 'money' : undefined} icon={<AlertTriangle size={16} strokeWidth={1.75} />} />
         <Link href="/caseload" className="block transition-opacity hover:opacity-90">
           <StatCard label="New leads" value={data.newLeadsCount} accent={data.newLeadsCount > 0 ? 'iris' : undefined} icon={<UserPlus size={16} strokeWidth={1.75} />} />
         </Link>
+      </div>
+
+      {/* Today's call list — surfaced first and on its own, matching the
+          "pending calls on login" pattern coaches expect from a CRM. */}
+      <div className="mb-6 rounded-card border border-line border-l-2 border-l-money bg-white p-6 shadow-card">
+        <p className="mb-4 text-sm font-medium text-ink">Today&apos;s calls</p>
+        {data.todayCalls.length === 0 && data.externalTodayEvents.length === 0 ? (
+          <p className="text-sm text-muted">Nothing on the books for today.</p>
+        ) : (
+          <div className="space-y-3">
+            {data.todayCalls.map((c) => (
+              <Link key={c.id} href={`/caseload/${c.borrower_id}`} className="flex items-center justify-between border-b border-line pb-3 text-sm last:border-0 last:pb-0 hover:text-money">
+                <span className="flex items-center gap-1.5 text-ink"><Phone size={13} strokeWidth={1.75} /> {name(c.borrowers)}</span>
+                <span className="figure text-muted">{new Date(c.scheduled_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
+              </Link>
+            ))}
+            {data.externalTodayEvents.map((e) => (
+              <div key={e.id} className="flex items-center justify-between border-b border-line pb-3 text-sm last:border-0 last:pb-0">
+                <span className="flex items-center gap-1.5 text-ink">{e.summary} <span className="text-xs text-muted">· Google Calendar</span></span>
+                <span className="figure text-muted">{e.startISO ? new Date(e.startISO).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'All day'}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -133,8 +161,8 @@ export default function TodayPage() {
         </div>
 
         <div className="rounded-card border border-line bg-white p-6 shadow-card">
-          <p className="mb-4 text-sm font-medium text-ink">Upcoming calls</p>
-          {data.upcomingCalls.length === 0 ? <p className="text-sm text-muted">Nothing booked this week.</p> : (
+          <p className="mb-4 text-sm font-medium text-ink">Later this week</p>
+          {data.upcomingCalls.length === 0 ? <p className="text-sm text-muted">Nothing else booked this week.</p> : (
             <div className="space-y-3">
               {data.upcomingCalls.map((c) => (
                 <Link key={c.id} href={`/caseload/${c.borrower_id}`} className="flex items-center justify-between border-b border-line pb-3 text-sm last:border-0 last:pb-0 hover:text-money">

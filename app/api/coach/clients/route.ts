@@ -45,7 +45,14 @@ export const GET = withErrorHandling(async function GET(req: Request) {
 
   const sb = createAdminClient();
   const { data: profile } = await sb.from('profiles').select('id').eq('clerk_user_id', userId).maybeSingle();
-  const scopeToSelf = role !== 'admin' && searchParams.get('all') !== 'true';
+  // Anyone who can manage the caseload broadly (admin/coach/processor) may
+  // request the whole org via ?all=true — sales stays locked to their own
+  // leads regardless. Previously this checked `role !== 'admin'`, which
+  // short-circuited to "not scoped" for ANY role whenever ?all=true was
+  // present, letting a non-admin bypass scoping just by adding the param —
+  // fixed to require the permission server-side, not just hide the UI toggle.
+  const canSeeAll = hasPermission(role, 'manage_caseload');
+  const scopeToSelf = !(canSeeAll && searchParams.get('all') === 'true');
 
   function scopedToAgent<T extends { eq: (...args: any[]) => any }>(q: T): T {
     return scopeToSelf && profile?.id ? q.eq('assigned_agent_id', profile.id) : q;
@@ -81,6 +88,7 @@ export const GET = withErrorHandling(async function GET(req: Request) {
     segment,
     canManageIntake: hasPermission(role, 'manage_intake'),
     canManageCaseload: hasPermission(role, 'manage_caseload'),
+    canSeeAll,
     isAdmin: role === 'admin',
   });
 });

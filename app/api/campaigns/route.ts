@@ -5,7 +5,7 @@ import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
 
-const TRIGGERS = ['manual', 'client_enrolled', 'journey_stage_enter', 'dispute_response_received', 'goal_achieved', 'stack_promo_expiring', 'loan_ready_reached', 'scheduled'];
+const TRIGGERS = ['manual', 'client_enrolled', 'journey_stage_enter', 'dispute_response_received', 'goal_achieved', 'stack_promo_expiring', 'loan_ready_reached', 'scheduled', 'lead_lost', 'stale_lead'];
 
 // List / create campaigns. This + campaign_steps is the backend a visual
 // drag-and-drop builder sits on top of — each campaign is a container,

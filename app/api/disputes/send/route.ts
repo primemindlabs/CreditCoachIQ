@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { sendCertifiedLetter } from '@/lib/disputes/lob';
+import { getOrgBranding } from '@/lib/branding';
 import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,7 @@ export const POST = withErrorHandling(async function POST(req: Request) {
 
   if (!disputes?.length) return NextResponse.json({ error: 'No pending disputes found' }, { status: 404 });
 
+  const branding = await getOrgBranding(orgId);
   const results: Array<{ disputeId: string; status: string; lobId?: string; error?: string }> = [];
 
   for (const dispute of disputes) {
@@ -40,6 +42,9 @@ export const POST = withErrorHandling(async function POST(req: Request) {
       borrowerAddress: dispute.borrower_address as string,
       bureauAddress: dispute.bureau_address as string,
       letterBody: dispute.letter_body as string,
+      logoUrl: branding.logoUrl,
+      primaryColor: branding.primaryColor,
+      fromName: branding.fromName,
     });
 
     if (send.status === 'failed') {

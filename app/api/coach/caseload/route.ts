@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { computeChurnRisk } from '@/lib/analytics/churnRisk';
+import { hasPermission } from '@/lib/auth/permissions';
 import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
@@ -16,7 +17,11 @@ export const GET = withErrorHandling(async function GET(req: Request) {
   const sb = createAdminClient();
   const { data: profile } = await sb.from('profiles').select('id').eq('clerk_user_id', userId).maybeSingle();
 
-  const scopeToSelf = role !== 'admin' && new URL(req.url).searchParams.get('all') !== 'true';
+  // Same fix as /api/coach/clients: ?all=true only bypasses scoping when the
+  // caller actually has manage_caseload — not for anyone who happens to pass
+  // the param. Complaints logging (the one remaining caller of this route)
+  // legitimately needs cross-client visibility for coach/processor/admin.
+  const scopeToSelf = !(hasPermission(role, 'manage_caseload') && new URL(req.url).searchParams.get('all') === 'true');
 
   let query = sb
     .from('borrowers')

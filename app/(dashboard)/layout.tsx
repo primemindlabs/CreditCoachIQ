@@ -27,11 +27,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
             <Link href="/today" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Today</Link>
             <Link href="/caseload" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Clients</Link>
             {canDisputes && <Link href="/credit-reports" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Credit Reports</Link>}
+            {(isAdmin || isCoach) && <Link href="/stacking" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Credit Stacking</Link>}
             {(isAdmin || isCoach) && <Link href="/referral-partners" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Referrals</Link>}
             {canComplaints && <Link href="/compliance/complaints" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Complaints</Link>}
             {(isAdmin || isCoach) && <Link href="/campaigns" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Campaigns</Link>}
             {(isAdmin || isCoach) && <Link href="/templates" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Templates</Link>}
             {isAdmin && <Link href="/analytics" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Analytics</Link>}
+            {isAdmin && <Link href="/settings" className="rounded-control px-2.5 py-1.5 hover:bg-line/60 hover:text-ink">Settings</Link>}
             <span className="ml-2"><UserButton afterSignOutUrl="/" /></span>
           </nav>
         </div>

@@ -12,6 +12,8 @@ const isPublicRoute = createRouteMatcher([
   '/portal(.*)', // the client-facing portal pages themselves — same token auth, not a Clerk session
   '/api/integrations(.*)', // cross-company server-to-server integrations (e.g. AshleyIQ funding-status sync) — Bearer secret verified in-handler
   '/api/telephony(.*)', // Twilio TwiML + call-status webhooks — Twilio can't send a session; status callback is signature-verified in-handler
+  '/api/embed(.*)', // public lead-capture form backend — org resolved by embed_slug, no session
+  '/apply(.*)', // the public lead-capture page itself
 ]);
 
 /**
@@ -32,6 +34,9 @@ const RATE_LIMIT_RULES: { pattern: RegExp; bucket: string; limit: number; window
   // General portal catch-all — coarse scraping/DoS backstop; normal client usage is nowhere near this.
   { pattern: /^\/api\/portal\//, bucket: 'portal-general', limit: 120, windowSeconds: 60 },
   { pattern: /^\/api\/messaging\/unsubscribe/, bucket: 'unsubscribe', limit: 30, windowSeconds: 60 },
+  // Public, unauthenticated write endpoint (writes a new borrower row per
+  // submission) — needs its own backstop against scripted spam.
+  { pattern: /^\/api\/embed\//, bucket: 'embed-lead', limit: 20, windowSeconds: 600 },
   // Defense in depth on top of Clerk's own protections.
   { pattern: /^\/(sign-in|sign-up)/, bucket: 'auth', limit: 30, windowSeconds: 60 },
 ];

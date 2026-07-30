@@ -27,6 +27,7 @@ interface Person {
 }
 
 interface Agent { id: string; first_name: string; last_name: string; role: string }
+interface SavedView { id: string; name: string; segment: Segment; filters: Record<string, unknown> }
 
 const TABS: { value: Segment; label: string }[] = [
   { value: 'leads', label: 'Leads' },
@@ -43,6 +44,7 @@ const STAGE_LABELS: Record<string, string> = {
   credit_coaching: 'Credit coaching', credit_stacking: 'Credit stacking',
   loan_ready: 'Loan ready', handed_off: 'Handed off', paused: 'Paused', exited: 'Exited',
 };
+const STAGE_ORDER = ['credit_coaching', 'credit_stacking', 'loan_ready', 'handed_off', 'paused', 'exited'];
 const STAGE_STYLE: Record<string, string> = {
   credit_coaching: 'bg-line text-muted', credit_stacking: 'bg-money-tint text-money-hover',
   loan_ready: 'bg-money-tint text-money-hover', handed_off: 'bg-money text-white',
@@ -72,7 +74,7 @@ export default function ClientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [canManageIntake, setCanManageIntake] = useState(false);
   const [canManageCaseload, setCanManageCaseload] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [canSeeAll, setCanSeeAll] = useState(false);
   const [showAllOrg, setShowAllOrg] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', leadSource: 'manual', interestLevel: '' });
@@ -86,6 +88,15 @@ export default function ClientsPage() {
   const [sourceFilter, setSourceFilter] = useState('');
   const [stageFilter, setStageFilter] = useState('');
   const [riskFilter, setRiskFilter] = useState('');
+  const [hotOnly, setHotOnly] = useState(false);
+  const [staleDays, setStaleDays] = useState('');
+  const [viewMode, setViewMode] = useState<'table' | 'board'>('table');
+  const [boardBusyId, setBoardBusyId] = useState<string | null>(null);
+
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [showSaveView, setShowSaveView] = useState(false);
+  const [saveViewName, setSaveViewName] = useState('');
+  const [savingView, setSavingView] = useState(false);
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [roster, setRoster] = useState<Agent[]>([]);
@@ -111,7 +122,7 @@ export default function ClientsPage() {
       setCounts(d.counts ?? { leads: 0, active: 0, funded: 0, denied: 0 });
       setCanManageIntake(!!d.canManageIntake);
       setCanManageCaseload(!!d.canManageCaseload);
-      setIsAdmin(!!d.isAdmin);
+      setCanSeeAll(!!d.canSeeAll);
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setPeople([]);
@@ -122,13 +133,69 @@ export default function ClientsPage() {
 
   useEffect(() => { load(tab, showAllOrg); }, [tab, showAllOrg, load]);
 
+  const loadSavedViews = useCallback(async (segment: Segment) => {
+    try {
+      const res = await fetch(`/api/saved-views?segment=${segment}`);
+      if (res.ok) {
+        const d = await res.json();
+        setSavedViews(d.views ?? []);
+      }
+    } catch {
+      // Non-critical — saved views just won't show this load.
+    }
+  }, []);
+
+  useEffect(() => { loadSavedViews(tab); }, [tab, loadSavedViews]);
+
   // Selection and filters don't carry meaning across tabs — reset on switch.
   useEffect(() => {
     setSelectedIds(new Set());
     setStatusFilter(''); setInterestFilter(''); setSourceFilter('');
-    setStageFilter(''); setRiskFilter('');
+    setStageFilter(''); setRiskFilter(''); setHotOnly(false); setStaleDays('');
     setBulkResult(null);
+    setShowSaveView(false);
+    if (tab !== 'active') setViewMode('table');
   }, [tab]);
+
+  function applySavedView(view: SavedView) {
+    const f = view.filters ?? {};
+    if (typeof f.statusFilter === 'string') setStatusFilter(f.statusFilter);
+    if (typeof f.interestFilter === 'string') setInterestFilter(f.interestFilter);
+    if (typeof f.sourceFilter === 'string') setSourceFilter(f.sourceFilter);
+    if (typeof f.stageFilter === 'string') setStageFilter(f.stageFilter);
+    if (typeof f.riskFilter === 'string') setRiskFilter(f.riskFilter);
+    if (typeof f.hotOnly === 'boolean') setHotOnly(f.hotOnly);
+    if (typeof f.staleDays === 'string') setStaleDays(f.staleDays);
+  }
+
+  async function saveCurrentView() {
+    if (!saveViewName.trim()) return;
+    setSavingView(true);
+    try {
+      const filters = tab === 'leads'
+        ? { statusFilter, interestFilter, sourceFilter, hotOnly }
+        : tab === 'active'
+          ? { stageFilter, riskFilter, staleDays }
+          : {};
+      const res = await fetch('/api/saved-views', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: saveViewName.trim(), segment: tab, filters }),
+      });
+      if (res.ok) {
+        setSaveViewName('');
+        setShowSaveView(false);
+        loadSavedViews(tab);
+      }
+    } finally {
+      setSavingView(false);
+    }
+  }
+
+  async function deleteSavedView(id: string) {
+    await fetch(`/api/saved-views?id=${id}`, { method: 'DELETE' });
+    loadSavedViews(tab);
+  }
 
   const sources = useMemo(() => Array.from(new Set(people.map((p) => p.lead_source).filter(Boolean))).sort(), [people]);
 
@@ -142,13 +209,42 @@ export default function ClientsPage() {
       if (statusFilter) list = list.filter((p) => p.lead_status === statusFilter);
       if (interestFilter) list = list.filter((p) => p.interest_level === interestFilter);
       if (sourceFilter) list = list.filter((p) => p.lead_source === sourceFilter);
+      if (hotOnly) list = list.filter((p) => p.interest_level === 'hot');
     }
     if (tab === 'active') {
       if (stageFilter) list = list.filter((p) => p.journey_stage === stageFilter);
       if (riskFilter) list = list.filter((p) => p.risk?.level === riskFilter);
+      const staleThreshold = staleDays ? Number(staleDays) : null;
+      if (staleThreshold != null && !Number.isNaN(staleThreshold)) {
+        list = list.filter((p) => p.daysInStage != null && p.daysInStage > staleThreshold);
+      }
     }
     return list;
-  }, [people, query, tab, statusFilter, interestFilter, sourceFilter, stageFilter, riskFilter]);
+  }, [people, query, tab, statusFilter, interestFilter, sourceFilter, stageFilter, riskFilter, hotOnly, staleDays]);
+
+  const staleCount = useMemo(() => people.filter((p) => p.daysInStage != null && p.daysInStage > 7).length, [people]);
+  const highRiskCount = useMemo(() => people.filter((p) => p.risk?.level === 'high').length, [people]);
+
+  async function changeStageFromBoard(borrowerId: string, toStage: string) {
+    setBoardBusyId(borrowerId);
+    try {
+      const res = await fetch('/api/journey/transition', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrower_id: borrowerId, to_stage: toStage }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not update stage (${res.status}).`);
+        return;
+      }
+      load(tab, showAllOrg);
+    } catch {
+      setError('Could not reach the server.');
+    } finally {
+      setBoardBusyId(null);
+    }
+  }
 
   async function loadRoster() {
     if (rosterLoaded) return;
@@ -283,7 +379,7 @@ export default function ClientsPage() {
           <p className="mt-1 text-sm text-muted">Everyone in the pipeline — prospect to funded — in one place.</p>
         </div>
         <div className="flex items-center gap-3">
-          {isAdmin && (
+          {canSeeAll && (
             <label className="flex items-center gap-1.5 text-sm text-muted">
               <input type="checkbox" checked={showAllOrg} onChange={(e) => setShowAllOrg(e.target.checked)} className="rounded border-line" />
               Show whole org
@@ -297,20 +393,84 @@ export default function ClientsPage() {
         </div>
       </div>
 
-      <div className="mb-6 flex gap-1 border-b border-line">
-        {TABS.map((t) => (
-          <button
-            key={t.value}
-            onClick={() => setTab(t.value)}
-            className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm ${
-              tab === t.value ? 'border-ink font-medium text-ink' : 'border-transparent text-muted hover:text-ink'
-            }`}
-          >
-            {t.label}
-            <span className="figure rounded-full bg-line px-1.5 py-0.5 text-[11px] text-muted">{counts[t.value]}</span>
-          </button>
-        ))}
+      {/* KPI header — command-center density concentrated on this one screen,
+          per design direction: everywhere else in the app stays simple. */}
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-6">
+        <div className="rounded-card border border-line bg-white p-4 shadow-card">
+          <p className="text-[11px] uppercase tracking-wide text-muted">Leads</p>
+          <p className="figure mt-1 text-xl font-medium text-ink">{counts.leads}</p>
+        </div>
+        <div className="rounded-card border border-line bg-white p-4 shadow-card">
+          <p className="text-[11px] uppercase tracking-wide text-muted">Active</p>
+          <p className="figure mt-1 text-xl font-medium text-ink">{counts.active}</p>
+        </div>
+        <div className="rounded-card border border-line bg-white p-4 shadow-card">
+          <p className="text-[11px] uppercase tracking-wide text-muted">Funded</p>
+          <p className="figure mt-1 text-xl font-medium text-money">{counts.funded}</p>
+        </div>
+        <div className="rounded-card border border-line bg-white p-4 shadow-card">
+          <p className="text-[11px] uppercase tracking-wide text-muted">Denied</p>
+          <p className="figure mt-1 text-xl font-medium text-terra">{counts.denied}</p>
+        </div>
+        <div className="rounded-card border border-line border-l-2 border-l-gold bg-white p-4 shadow-card">
+          <p className="text-[11px] uppercase tracking-wide text-muted">Stale &gt;7d</p>
+          <p className="figure mt-1 text-xl font-medium text-ink">{staleCount}</p>
+        </div>
+        <div className="rounded-card border border-line border-l-2 border-l-terra bg-white p-4 shadow-card">
+          <p className="text-[11px] uppercase tracking-wide text-muted">High risk</p>
+          <p className="figure mt-1 text-xl font-medium text-ink">{highRiskCount}</p>
+        </div>
       </div>
+
+      <div className="mb-6 flex items-center justify-between border-b border-line">
+        <div className="flex gap-1">
+          {TABS.map((t) => (
+            <button
+              key={t.value}
+              onClick={() => setTab(t.value)}
+              className={`flex items-center gap-1.5 border-b-2 px-3 py-2.5 text-sm ${
+                tab === t.value ? 'border-ink font-medium text-ink' : 'border-transparent text-muted hover:text-ink'
+              }`}
+            >
+              {t.label}
+              <span className="figure rounded-full bg-line px-1.5 py-0.5 text-[11px] text-muted">{counts[t.value]}</span>
+            </button>
+          ))}
+        </div>
+        {tab === 'active' && (
+          <div className="mb-2 flex gap-1 rounded-control border border-line p-0.5">
+            <button onClick={() => setViewMode('table')} className={`rounded px-2.5 py-1 text-xs ${viewMode === 'table' ? 'bg-ink text-white' : 'text-muted hover:text-ink'}`}>Table</button>
+            <button onClick={() => setViewMode('board')} className={`rounded px-2.5 py-1 text-xs ${viewMode === 'board' ? 'bg-ink text-white' : 'text-muted hover:text-ink'}`}>Board</button>
+          </div>
+        )}
+      </div>
+
+      {/* Saved views — first-class per-coach filter presets, not just the fixed tabs above. */}
+      {(savedViews.length > 0 || showSaveView) && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {savedViews.map((v) => (
+            <span key={v.id} className="flex items-center gap-1 rounded-full border border-line bg-white px-3 py-1 text-xs text-ink">
+              <button onClick={() => applySavedView(v)} className="hover:underline">{v.name}</button>
+              <button onClick={() => deleteSavedView(v.id)} className="text-muted hover:text-terra" title="Delete view">×</button>
+            </span>
+          ))}
+          {showSaveView && (
+            <span className="flex items-center gap-1.5">
+              <input
+                value={saveViewName}
+                onChange={(e) => setSaveViewName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') saveCurrentView(); }}
+                placeholder="View name…"
+                className="rounded-control border border-line px-2.5 py-1 text-xs text-ink placeholder:text-muted"
+              />
+              <button onClick={saveCurrentView} disabled={savingView || !saveViewName.trim()} className="rounded-control bg-ink px-2.5 py-1 text-xs font-medium text-white disabled:opacity-50">
+                {savingView ? 'Saving…' : 'Save'}
+              </button>
+              <button onClick={() => setShowSaveView(false)} className="text-xs text-muted hover:text-ink">Cancel</button>
+            </span>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="mb-6 rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
@@ -377,6 +537,12 @@ export default function ClientsPage() {
                   {sources.map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
                 </select>
               )}
+              <button
+                onClick={() => setHotOnly((v) => !v)}
+                className={`rounded-control border px-3 py-2 text-sm ${hotOnly ? 'border-terra bg-terra-tint text-terra' : 'border-line text-ink hover:border-ink/30'}`}
+              >
+                Hot only
+              </button>
             </>
           )}
           {tab === 'active' && (
@@ -389,7 +555,23 @@ export default function ClientsPage() {
                 <option value="">All risk</option>
                 {RISK_LEVELS.map((r) => <option key={r} value={r}>{r}</option>)}
               </select>
+              <label className="flex items-center gap-1.5 text-sm text-muted">
+                Stale &gt;
+                <input
+                  type="number"
+                  value={staleDays}
+                  onChange={(e) => setStaleDays(e.target.value)}
+                  placeholder="7"
+                  className="figure w-14 rounded-control border border-line px-2 py-1.5 text-sm text-ink"
+                />
+                days
+              </label>
             </>
+          )}
+          {!showSaveView && (tab === 'leads' || tab === 'active') && (
+            <button onClick={() => setShowSaveView(true)} className="rounded-control border border-line px-3 py-2 text-sm text-ink hover:border-ink/30">
+              Save view
+            </button>
           )}
         </div>
       )}
@@ -435,6 +617,42 @@ export default function ClientsPage() {
       ) : filtered.length === 0 ? (
         <div className="rounded-card border border-line bg-white p-12 text-center shadow-card">
           <p className="text-[15px] text-ink">Nobody here yet</p>
+        </div>
+      ) : tab === 'active' && viewMode === 'board' ? (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {STAGE_ORDER.map((stage) => {
+            const inStage = filtered.filter((p) => p.journey_stage === stage);
+            return (
+              <div key={stage} className="w-64 shrink-0 rounded-card border border-line bg-paper p-3">
+                <div className="mb-3 flex items-center justify-between px-1">
+                  <p className="text-xs font-medium text-ink">{STAGE_LABELS[stage]}</p>
+                  <span className="figure rounded-full bg-line px-1.5 py-0.5 text-[11px] text-muted">{inStage.length}</span>
+                </div>
+                <div className="space-y-2">
+                  {inStage.map((p) => (
+                    <div key={p.id} className="rounded-control border border-line bg-white p-3 shadow-card">
+                      <Link href={`/caseload/${p.id}`} className="text-sm font-medium text-ink hover:underline">{p.first_name} {p.last_name}</Link>
+                      <div className="mt-1 flex items-center justify-between text-xs text-muted">
+                        <span>{p.daysInStage != null ? `${p.daysInStage}d in stage` : '—'}</span>
+                        {p.risk?.level && p.risk.level !== 'low' && (
+                          <span className={`rounded-control px-1.5 py-0.5 font-medium ${RISK_STYLE[p.risk.level]}`}>{p.risk.level}</span>
+                        )}
+                      </div>
+                      <select
+                        value={p.journey_stage}
+                        disabled={boardBusyId === p.id}
+                        onChange={(e) => changeStageFromBoard(p.id, e.target.value)}
+                        className="mt-2 w-full rounded-control border border-line px-2 py-1 text-xs text-ink disabled:opacity-50"
+                      >
+                        {STAGE_ORDER.map((s) => <option key={s} value={s}>{STAGE_LABELS[s]}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                  {inStage.length === 0 && <p className="px-1 text-xs text-muted">Empty</p>}
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="overflow-hidden rounded-card border border-line bg-white shadow-card">

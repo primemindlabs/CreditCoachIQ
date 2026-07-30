@@ -10,13 +10,26 @@ export default function PortalMessagesPage({ params }: { params: { token: string
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
-    const res = await fetch(`/api/portal/${token}/messages`);
-    const data = await res.json();
-    setMessages(data.messages ?? []);
-    setLoading(false);
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/portal/${token}/messages`);
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not load your messages (${res.status}).`);
+        return;
+      }
+      const data = await res.json();
+      setMessages(data.messages ?? []);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
@@ -40,6 +53,8 @@ export default function PortalMessagesPage({ params }: { params: { token: string
   return (
     <div>
       <h1 className="mb-6 text-[26px] font-medium text-ink">Messages</h1>
+
+      {error && <p className="mb-4 text-sm text-terra">{error}</p>}
 
       <div className="mb-4 h-[420px] overflow-y-auto rounded-card border border-line bg-white p-6">
         {loading ? (

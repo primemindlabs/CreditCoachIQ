@@ -139,6 +139,158 @@ export async function computeTimeInStage(sb: SupabaseClient, orgId: string): Pro
   return { avgDaysByStage, sampleSizeByStage };
 }
 
+export interface CommissionSnapshot {
+  paidThisMonth: number;
+  pendingPayout: number;
+  ytdEarnings: number;
+  byPartner: { referralPartnerId: string; partnerName: string; paid: number; pending: number }[];
+}
+
+/**
+ * Referral-partner commission rollup, read from referral_commission_events
+ * (append-only audit table — INSERT-only RLS, see migration 0012). Folded
+ * into the existing Analytics page rather than a standalone Commissions
+ * module, per direction — this is a KPI surface, not a payout workflow.
+ */
+export async function computeCommissions(sb: SupabaseClient, orgId: string): Promise<CommissionSnapshot> {
+  const { data: events } = await sb
+    .from('referral_commission_events')
+    .select('referral_partner_id, event_type, amount, created_at')
+    .eq('org_id', orgId);
+
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+
+  let paidThisMonth = 0;
+  let ytdEarnings = 0;
+  const owedByPartner = new Map<string, number>();
+  const paidByPartner = new Map<string, number>();
+
+  for (const e of events ?? []) {
+    const amount = Number(e.amount) || 0;
+    const createdAt = new Date(e.created_at as string);
+    const partnerId = e.referral_partner_id as string;
+
+    if (e.event_type === 'commission_paid') {
+      paidByPartner.set(partnerId, (paidByPartner.get(partnerId) ?? 0) + amount);
+      if (createdAt >= monthStart) paidThisMonth += amount;
+      if (createdAt >= yearStart) ytdEarnings += amount;
+    } else if (e.event_type === 'commission_owed') {
+      owedByPartner.set(partnerId, (owedByPartner.get(partnerId) ?? 0) + amount);
+    } else if (e.event_type === 'commission_reversed') {
+      owedByPartner.set(partnerId, (owedByPartner.get(partnerId) ?? 0) - amount);
+    }
+  }
+
+  const partnerIds = Array.from(new Set([...owedByPartner.keys(), ...paidByPartner.keys()]));
+  let names = new Map<string, string>();
+  if (partnerIds.length > 0) {
+    const { data: partners } = await sb.from('referral_partners').select('id, name').in('id', partnerIds);
+    names = new Map((partners ?? []).map((p) => [p.id as string, p.name as string]));
+  }
+
+  let pendingPayout = 0;
+  const byPartner = partnerIds.map((id) => {
+    const owed = owedByPartner.get(id) ?? 0;
+    const paid = paidByPartner.get(id) ?? 0;
+    const pending = Math.max(0, owed - paid);
+    pendingPayout += pending;
+    return { referralPartnerId: id, partnerName: names.get(id) ?? 'Unknown partner', paid, pending };
+  }).sort((a, b) => b.paid + b.pending - (a.paid + a.pending));
+
+  return {
+    paidThisMonth: Math.round(paidThisMonth * 100) / 100,
+    pendingPayout: Math.round(pendingPayout * 100) / 100,
+    ytdEarnings: Math.round(ytdEarnings * 100) / 100,
+    byPartner,
+  };
+}
+
+export interface ProductionGoal {
+  id: string;
+  profileId: string | null;
+  profileName: string | null;
+  metric: 'clients_funded' | 'new_enrollments';
+  period: 'monthly' | 'quarterly' | 'annual';
+  periodStart: string;
+  targetValue: number;
+  actual: number;
+}
+
+function periodEnd(periodStart: Date, period: 'monthly' | 'quarterly' | 'annual'): Date {
+  const end = new Date(periodStart);
+  if (period === 'monthly') end.setMonth(end.getMonth() + 1);
+  else if (period === 'quarterly') end.setMonth(end.getMonth() + 3);
+  else end.setFullYear(end.getFullYear() + 1);
+  return end;
+}
+
+/**
+ * Coach/org production goals (migration 0019) — distinct from financial_goals,
+ * which are per-client targets. Computes actual progress against each goal's
+ * own period window, scoped to the goal's profile_id when set (org-wide when
+ * null), reading whatever's already tracked (funding_status_updated_at,
+ * enrollment created_at) rather than a separate ledger.
+ */
+export async function computeProductionGoals(sb: SupabaseClient, orgId: string): Promise<ProductionGoal[]> {
+  const { data: goals } = await sb
+    .from('production_goals')
+    .select('id, profile_id, metric, period, period_start, target_value')
+    .eq('org_id', orgId)
+    .order('period_start', { ascending: false });
+  if (!goals?.length) return [];
+
+  const profileIds = Array.from(new Set(goals.map((g) => g.profile_id).filter(Boolean))) as string[];
+  let names = new Map<string, string>();
+  if (profileIds.length > 0) {
+    const { data: profiles } = await sb.from('profiles').select('id, first_name, last_name').in('id', profileIds);
+    names = new Map((profiles ?? []).map((p) => [p.id as string, `${p.first_name} ${p.last_name}`]));
+  }
+
+  const results: ProductionGoal[] = [];
+  for (const g of goals) {
+    const start = new Date(g.period_start as string);
+    const end = periodEnd(start, g.period as 'monthly' | 'quarterly' | 'annual');
+    let actual = 0;
+
+    if (g.metric === 'clients_funded') {
+      let query = sb.from('borrowers').select('id', { count: 'exact', head: true })
+        .eq('org_id', orgId).eq('funding_status', 'funded')
+        .gte('funding_status_updated_at', start.toISOString()).lt('funding_status_updated_at', end.toISOString());
+      if (g.profile_id) query = query.eq('assigned_agent_id', g.profile_id);
+      const { count } = await query;
+      actual = count ?? 0;
+    } else {
+      // new_enrollments scoped to a coach requires resolving their borrower
+      // ids first — filtering an embedded relation's column via count-only
+      // head requests isn't reliable across supabase-js versions, so this
+      // mirrors the myBorrowerIds pattern already used in /api/coach/today.
+      const { data: enrollments } = await sb.from('credit_repair_enrollments').select('id, borrower_id')
+        .eq('org_id', orgId).gte('created_at', start.toISOString()).lt('created_at', end.toISOString());
+      if (g.profile_id) {
+        const { data: mine } = await sb.from('borrowers').select('id').eq('org_id', orgId).eq('assigned_agent_id', g.profile_id);
+        const mineIds = new Set((mine ?? []).map((b) => b.id as string));
+        actual = (enrollments ?? []).filter((e) => mineIds.has(e.borrower_id as string)).length;
+      } else {
+        actual = (enrollments ?? []).length;
+      }
+    }
+
+    results.push({
+      id: g.id as string,
+      profileId: (g.profile_id as string) ?? null,
+      profileName: g.profile_id ? (names.get(g.profile_id as string) ?? 'Unknown coach') : null,
+      metric: g.metric as 'clients_funded' | 'new_enrollments',
+      period: g.period as 'monthly' | 'quarterly' | 'annual',
+      periodStart: g.period_start as string,
+      targetValue: Number(g.target_value),
+      actual,
+    });
+  }
+  return results;
+}
+
 export interface HandoffConversion {
   handoffsSent: number;
   funded: number;

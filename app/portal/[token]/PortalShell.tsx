@@ -21,6 +21,8 @@ const NAV = [
  * a magic-link click alone isn't enough; the client also has to confirm a
  * code sent to the email on file, once per ~30-day session.
  */
+interface Branding { logoUrl: string | null; primaryColor: string | null; fromName: string | null }
+
 export default function PortalShell({ token, children }: { token: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const [gate, setGate] = useState<GateState>('checking');
@@ -28,6 +30,7 @@ export default function PortalShell({ token, children }: { token: string; childr
   const [code, setCode] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [branding, setBranding] = useState<Branding | null>(null);
 
   const checkStatus = useCallback(async () => {
     try {
@@ -41,12 +44,16 @@ export default function PortalShell({ token, children }: { token: string; childr
       }
       const data = await res.json().catch(() => null);
       if (!data?.valid) return setGate('invalid');
+      if (data.branding) setBranding(data.branding);
       setGate(data.mfaCurrent ? 'ready' : 'needs_mfa');
     } catch {
       setError('Could not reach the server. Check your connection and try again.');
       setGate('invalid');
     }
   }, [token]);
+
+  const accent = branding?.primaryColor || undefined;
+  const brandName = branding?.fromName || 'CreditCoachIQ';
 
   useEffect(() => { checkStatus(); }, [checkStatus]);
 
@@ -116,8 +123,24 @@ export default function PortalShell({ token, children }: { token: string; childr
           <div className="mb-5 h-1.5 w-8 rounded-full bg-money" />
           <p className="text-[17px] font-medium text-ink">Verify it&apos;s you</p>
           <p className="mt-2 text-sm text-muted">
-            {otpSent ? 'We sent a 6-digit code to your email. Enter it below.' : 'Sending a verification code to your email…'}
+            {otpSent
+              ? 'We sent a 6-digit code to your email. Enter it below.'
+              : sending
+                ? 'Sending a verification code to your email…'
+                : error
+                  ? "Couldn't send your code."
+                  : 'Sending a verification code to your email…'}
           </p>
+          {/* Previously only rendered inside the otpSent branch below, so a
+              failed initial send (bad Resend config, no email on file, rate
+              limit) left this screen stuck on "Sending…" forever with the
+              real reason hidden — visible regardless of otpSent now. */}
+          {error && !otpSent && <p className="mt-2 text-sm text-terra">{error}</p>}
+          {!otpSent && !sending && error && (
+            <button onClick={sendCode} className="mt-4 w-full rounded-control bg-money px-5 py-3 text-sm font-medium text-white hover:bg-money-hover">
+              Try again
+            </button>
+          )}
           {otpSent && (
             <div className="mt-6">
               <input
@@ -154,8 +177,13 @@ export default function PortalShell({ token, children }: { token: string; childr
       <header className="sticky top-0 z-10 border-b border-line bg-paper/80 backdrop-blur">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
-            <span className="inline-block h-1.5 w-1.5 rounded-full bg-money" />
-            <span className="text-[14px] font-medium tracking-tight text-ink">CreditCoachIQ</span>
+            {branding?.logoUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={branding.logoUrl} alt={brandName} className="h-5 w-auto" />
+            ) : (
+              <span className="inline-block h-1.5 w-1.5 rounded-full bg-money" style={accent ? { backgroundColor: accent } : undefined} />
+            )}
+            <span className="text-[14px] font-medium tracking-tight text-ink">{brandName}</span>
           </div>
           <nav className="flex items-center gap-1 text-sm">
             {NAV.map((item) => {

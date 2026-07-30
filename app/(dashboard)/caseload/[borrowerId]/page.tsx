@@ -12,8 +12,9 @@ interface ClientDetail {
   borrower: {
     id: string; first_name: string; last_name: string; email: string | null; phone: string | null;
     plan_tier: string; journey_stage: string; state: string | null; funding_status: string | null;
-    lead_status: string; interest_level: string | null; coach_notes: string | null;
+    lead_status: string; interest_level: string | null; coach_notes: string | null; assigned_agent_id: string | null;
   };
+  canReassign: boolean;
   enrollment: {
     id: string; status: string; target_score: number; current_score_exp: number | null; current_score_eqx: number | null; current_score_tu: number | null;
     croa_disclosure_signed_at: string | null; mortgage_ready_at: string | null;
@@ -23,11 +24,18 @@ interface ClientDetail {
   recentCalls: { id: string; status: string; duration_seconds: number | null; started_at: string; notes: string | null }[];
   referralPartnerName: string | null;
   scoreHistory: { date: string; score: number }[];
+  churnRisk: { score: number; level: 'low' | 'medium' | 'high'; reasons: string[] } | null;
 }
 
 interface StackSummary { capitalAvailable: number; activeApplicationCount: number; expiringWithin30Days: { lender_name: string }[]; }
 interface Dispute { id: string; bureau: string; letter_body: string; sent_at: string | null; response_status: string; credit_tradelines: { creditor_name: string } | null; }
 interface SmsMessage { id: string; direction: 'inbound' | 'outbound'; body: string; status: string; created_at: string; }
+interface PortalMessage { id: string; sender: 'coach' | 'borrower'; body: string; created_at: string; read_at: string | null }
+interface Agent { id: string; first_name: string; last_name: string; role: string }
+interface ClientDocument {
+  id: string; doc_type: string; file_name: string; mime_type: string | null;
+  size_bytes: number | null; enrollment_id: string | null; created_at: string; url: string | null;
+}
 interface ActivityItem {
   id: string;
   type: 'stage_change' | 'note' | 'call' | 'sms' | 'email' | 'portal_message' | 'status_change';
@@ -48,6 +56,26 @@ interface BillingInfo {
 function currency(n: number): string {
   return (n ?? 0).toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 }
+
+function fileSize(bytes: number | null): string {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+const DOC_TYPES = [
+  { value: 'government_id', label: 'Government ID' },
+  { value: 'proof_of_income', label: 'Proof of income' },
+  { value: 'bank_statement', label: 'Bank statement' },
+  { value: 'croa_disclosure', label: 'CROA disclosure' },
+  { value: 'dispute_correspondence', label: 'Dispute correspondence' },
+  { value: 'credit_report', label: 'Credit report' },
+  { value: 'business_formation', label: 'Business formation' },
+  { value: 'ein_letter', label: 'EIN letter' },
+  { value: 'voided_check', label: 'Voided check' },
+  { value: 'other', label: 'Other' },
+] as const;
+const DOC_TYPE_LABEL: Record<string, string> = Object.fromEntries(DOC_TYPES.map((d) => [d.value, d.label]));
 
 const FUNDING_STATUSES = [
   { value: 'pre_qual', label: 'Pre-qual' },
@@ -89,13 +117,37 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
   const [taskDueDate, setTaskDueDate] = useState('');
   const [taskSaving, setTaskSaving] = useState(false);
   const [completingTaskIds, setCompletingTaskIds] = useState<Set<string>>(new Set());
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [roster, setRoster] = useState<Agent[]>([]);
+  const [rosterLoaded, setRosterLoaded] = useState(false);
+  const [assignBusy, setAssignBusy] = useState(false);
+  const [portalMessages, setPortalMessages] = useState<PortalMessage[]>([]);
+  const [portalDraft, setPortalDraft] = useState('');
+  const [portalSending, setPortalSending] = useState(false);
+  const [smsSuggestLoading, setSmsSuggestLoading] = useState(false);
+  const [portalSuggestLoading, setPortalSuggestLoading] = useState(false);
+  const [churnNarrative, setChurnNarrative] = useState<string | null>(null);
+  const [churnNarrativeLoading, setChurnNarrativeLoading] = useState(false);
+  const [documents, setDocuments] = useState<ClientDocument[]>([]);
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const [docType, setDocType] = useState('other');
+  const [docAttachToEnrollment, setDocAttachToEnrollment] = useState(false);
+  const [docUploading, setDocUploading] = useState(false);
+  const [docError, setDocError] = useState<string | null>(null);
+  const [deletingDocIds, setDeletingDocIds] = useState<Set<string>>(new Set());
+  const [sigVerifying, setSigVerifying] = useState(false);
+  const [sigVerifyResult, setSigVerifyResult] = useState<{ valid: boolean; reason?: string; signedAt?: string; method?: string } | null>(null);
+  const [sigDownloading, setSigDownloading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setActivityLoading(true);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/coach/client/${borrowerId}`);
       if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setLoadError(d.error ?? `Could not load this client (${res.status}).`);
         setLoading(false);
         setActivityLoading(false);
         return;
@@ -103,18 +155,22 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       const detail = await res.json();
       setData(detail);
       setNotesDraft(detail.borrower?.coach_notes ?? '');
-      const [disputesRes, stackData, billingData, smsData, activityData] = await Promise.all([
+      const [disputesRes, stackData, billingData, smsData, activityData, portalData, documentsData] = await Promise.all([
         detail.enrollment ? fetch(`/api/disputes?enrollment_id=${detail.enrollment.id}`).then((r) => r.json()) : Promise.resolve({ disputes: [] }),
         fetch(`/api/stacking/summary?borrower_id=${borrowerId}`).then((r) => r.json()),
         fetch(`/api/billing/invoices?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : null)),
         fetch(`/api/coach/sms?borrowerId=${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] })),
         fetch(`/api/coach/client/${borrowerId}/activity`).then((r) => (r.ok ? r.json() : { items: [] })),
+        fetch(`/api/coach/messages/${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] })),
+        fetch(`/api/coach/client/${borrowerId}/documents`).then((r) => (r.ok ? r.json() : { documents: [] })),
       ]);
       setDisputes(disputesRes.disputes ?? []);
       setStack(stackData);
+      setPortalMessages(portalData.messages ?? []);
       setBilling(billingData);
       setSmsMessages(smsData.messages ?? []);
       setActivity(activityData.items ?? []);
+      setDocuments(documentsData.documents ?? []);
     } finally {
       setLoading(false);
       setActivityLoading(false);
@@ -256,6 +312,42 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
     }
   }
 
+  async function loadRoster() {
+    if (rosterLoaded) return;
+    try {
+      const res = await fetch('/api/coach/roster');
+      if (res.ok) {
+        const d = await res.json();
+        setRoster(d.agents ?? []);
+      }
+    } catch {
+      // Non-critical — dropdown just stays limited to whoever's already assigned.
+    } finally {
+      setRosterLoaded(true);
+    }
+  }
+
+  async function changeAssignedAgent(agentId: string) {
+    setAssignBusy(true);
+    try {
+      const res = await fetch(`/api/coach/client/${borrowerId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ assignedAgentId: agentId || null }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not reassign this client (${res.status}).`);
+        return;
+      }
+      load();
+    } catch {
+      setPortalMsg('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setAssignBusy(false);
+    }
+  }
+
   async function portalAction(action: 'revoke' | 'reissue') {
     try {
       const res = await fetch('/api/coach/portal-access', {
@@ -350,6 +442,127 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
     }
   }
 
+  async function sendPortalMessage() {
+    if (!portalDraft.trim()) return;
+    setPortalSending(true);
+    try {
+      const res = await fetch(`/api/coach/messages/${borrowerId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: portalDraft.trim() }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPortalMsg(d.error ?? `Could not send that message (${res.status}).`);
+        return;
+      }
+      setPortalDraft('');
+      const thread = await fetch(`/api/coach/messages/${borrowerId}`).then((r) => (r.ok ? r.json() : { messages: [] }));
+      setPortalMessages(thread.messages ?? []);
+    } catch {
+      setPortalMsg('Could not reach the server.');
+    } finally {
+      setPortalSending(false);
+    }
+  }
+
+  async function uploadDocument() {
+    if (!docFile) return;
+    setDocUploading(true);
+    setDocError(null);
+    try {
+      const form = new FormData();
+      form.append('file', docFile);
+      form.append('docType', docType);
+      if (docAttachToEnrollment && enrollment) form.append('enrollmentId', enrollment.id);
+      const res = await fetch(`/api/coach/client/${borrowerId}/documents`, { method: 'POST', body: form });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setDocError(d.error ?? `Could not upload that file (${res.status}).`);
+        return;
+      }
+      setDocFile(null);
+      setDocType('other');
+      setDocAttachToEnrollment(false);
+      const refreshed = await fetch(`/api/coach/client/${borrowerId}/documents`).then((r) => (r.ok ? r.json() : { documents: [] }));
+      setDocuments(refreshed.documents ?? []);
+    } catch {
+      setDocError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setDocUploading(false);
+    }
+  }
+
+  async function deleteDocument(id: string) {
+    setDeletingDocIds((prev) => new Set(prev).add(id));
+    try {
+      const res = await fetch(`/api/coach/client/${borrowerId}/documents?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setDocError(d.error ?? `Could not remove that document (${res.status}).`);
+        return;
+      }
+      setDocuments((prev) => prev.filter((doc) => doc.id !== id));
+    } catch {
+      setDocError('Could not reach the server.');
+    } finally {
+      setDeletingDocIds((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
+  }
+
+  // Shared by both threads — asks the AI for a draft based on the existing
+  // conversation, then drops it into the compose box for the coach to edit
+  // or clear before sending. Never sends anything on its own.
+  async function suggestReply(channel: 'sms' | 'portal') {
+    const thread = channel === 'sms'
+      ? smsMessages.map((m) => ({ from: (m.direction === 'outbound' ? 'coach' : 'client') as 'coach' | 'client', body: m.body }))
+      : portalMessages.map((m) => ({ from: (m.sender === 'coach' ? 'coach' : 'client') as 'coach' | 'client', body: m.body }));
+    if (thread.length === 0) return;
+
+    const setLoading = channel === 'sms' ? setSmsSuggestLoading : setPortalSuggestLoading;
+    const setDraft = channel === 'sms' ? setSmsDraft : setPortalDraft;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/coach/reply-suggestion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, firstName: borrower?.first_name ?? 'there', thread }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setPortalMsg(d.error ?? 'Could not generate a suggestion.');
+        return;
+      }
+      setDraft(d.draft ?? '');
+    } catch {
+      setPortalMsg('Could not reach the server.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function explainChurnRisk() {
+    if (!data?.churnRisk) return;
+    setChurnNarrativeLoading(true);
+    try {
+      const res = await fetch(`/api/coach/client/${borrowerId}/churn-narrative`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ firstName: data.borrower.first_name, risk: data.churnRisk, activity }),
+      });
+      const d = await res.json().catch(() => ({}));
+      setChurnNarrative(res.ok ? d.narrative : (d.error ?? 'Could not generate an explanation.'));
+    } catch {
+      setChurnNarrative('Could not reach the server.');
+    } finally {
+      setChurnNarrativeLoading(false);
+    }
+  }
+
   async function saveCallNotes(logId: string) {
     if (!(logId in callNoteDrafts)) return; // untouched — don't overwrite on a stray blur
     const notes = callNoteDrafts[logId];
@@ -370,12 +583,60 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
     }
   }
 
-  async function convertLead() {
-    setConverting(true);
+  async function verifySignature() {
+    setSigVerifying(true);
+    setSigVerifyResult(null);
     try {
-      const res = await fetch(`/api/leads/${borrowerId}/convert`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+      const res = await fetch(`/api/coach/client/${borrowerId}/signature-certificate?verifyOnly=true`);
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSigVerifyResult({ valid: false, reason: d.error ?? `Could not verify (${res.status}).` });
+        return;
+      }
+      setSigVerifyResult(d);
+    } catch {
+      setSigVerifyResult({ valid: false, reason: 'Could not reach the server.' });
+    } finally {
+      setSigVerifying(false);
+    }
+  }
+
+  async function downloadSignatureCertificate() {
+    setSigDownloading(true);
+    try {
+      const res = await fetch(`/api/coach/client/${borrowerId}/signature-certificate`);
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
+        setPortalMsg(d.error ?? `Could not generate the certificate (${res.status}).`);
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `croa-signed-agreement-${borrowerId}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setPortalMsg('Could not reach the server.');
+    } finally {
+      setSigDownloading(false);
+    }
+  }
+
+  async function convertLead(overrideStateWarning = false) {
+    setConverting(true);
+    try {
+      const res = await fetch(`/api/leads/${borrowerId}/convert`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ overrideStateWarning }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        if (res.status === 409 && d.warning === 'state_not_registered' && window.confirm(`${d.error}\n\nConvert anyway?`)) {
+          return convertLead(true);
+        }
         setPortalMsg(d.error ?? `Could not convert (${res.status}).`);
         return;
       }
@@ -386,6 +647,14 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
     } finally {
       setConverting(false);
     }
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="max-w-sm text-center text-sm text-muted">{loadError}</p>
+      </div>
+    );
   }
 
   if (loading || !data) {
@@ -410,10 +679,46 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
               {borrower.email ?? 'No email'} · {borrower.phone ?? 'No phone'} · {borrower.plan_tier.replace('_', ' ')}
               {data.referralPartnerName ? ` · Referred by ${data.referralPartnerName}` : ''}
             </p>
+            <div className="mt-3 flex items-center gap-1.5 text-sm">
+              <span className="text-muted">Coach:</span>
+              {data.canReassign ? (
+                <select
+                  value={borrower.assigned_agent_id ?? ''}
+                  disabled={assignBusy}
+                  onFocus={loadRoster}
+                  onChange={(e) => changeAssignedAgent(e.target.value)}
+                  className="rounded-control border border-line px-2 py-1 text-sm text-ink disabled:opacity-60"
+                >
+                  <option value="">Unassigned</option>
+                  {roster.map((a) => <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>)}
+                </select>
+              ) : (
+                <span className="text-ink">{roster.find((a) => a.id === borrower.assigned_agent_id)?.first_name ?? (borrower.assigned_agent_id ? 'Assigned' : 'Unassigned')}</span>
+              )}
+            </div>
             {enrollment ? (
-              <p className={`mt-3 text-xs ${enrollment?.croa_disclosure_signed_at ? 'text-money' : 'text-gold'}`}>
-                {enrollment?.croa_disclosure_signed_at ? 'CROA signed' : 'CROA not yet signed'}
-              </p>
+              <div className="mt-3">
+                <p className={`text-xs ${enrollment?.croa_disclosure_signed_at ? 'text-money' : 'text-gold'}`}>
+                  {enrollment?.croa_disclosure_signed_at ? 'CROA signed' : 'CROA not yet signed'}
+                </p>
+                {enrollment?.croa_disclosure_signed_at && (
+                  <div className="mt-1.5 flex items-center gap-3 text-xs">
+                    <button onClick={verifySignature} disabled={sigVerifying} className="text-money hover:underline disabled:opacity-60">
+                      {sigVerifying ? 'Verifying…' : 'Verify signature'}
+                    </button>
+                    <button onClick={downloadSignatureCertificate} disabled={sigDownloading} className="text-money hover:underline disabled:opacity-60">
+                      {sigDownloading ? 'Preparing…' : 'Download certificate'}
+                    </button>
+                  </div>
+                )}
+                {sigVerifyResult && (
+                  <p className={`mt-1.5 text-xs ${sigVerifyResult.valid ? 'text-money' : 'text-terra'}`}>
+                    {sigVerifyResult.valid
+                      ? `Integrity check passed — signed ${sigVerifyResult.signedAt ? new Date(sigVerifyResult.signedAt).toLocaleString() : ''} (${sigVerifyResult.method})`
+                      : `Integrity check failed — ${sigVerifyResult.reason}`}
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="mt-3 text-xs text-gold">Lead · {borrower.lead_status}{borrower.interest_level ? ` · ${borrower.interest_level}` : ''} — not yet enrolled</p>
             )}
@@ -477,6 +782,70 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
         {notesError && <p className="mt-2 text-xs text-terra">{notesError}</p>}
       </div>
 
+      {/* Document vault — client-level by default; can optionally be scoped to
+          the active enrollment so it shows up as deal-specific later on. */}
+      <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
+        <p className="mb-5 text-sm font-medium text-ink">Documents</p>
+        <div className="mb-4 flex flex-wrap items-center gap-2 border-b border-line pb-4">
+          <input
+            type="file"
+            onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+            className="max-w-[220px] flex-1 text-xs text-ink file:mr-2 file:rounded-control file:border file:border-line file:bg-white file:px-2 file:py-1 file:text-xs file:text-ink"
+          />
+          <select
+            value={docType}
+            onChange={(e) => setDocType(e.target.value)}
+            className="rounded-control border border-line px-2 py-1.5 text-xs text-ink"
+          >
+            {DOC_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+          </select>
+          {enrollment && (
+            <label className="flex items-center gap-1.5 text-xs text-muted">
+              <input type="checkbox" checked={docAttachToEnrollment} onChange={(e) => setDocAttachToEnrollment(e.target.checked)} />
+              Attach to enrollment
+            </label>
+          )}
+          <button
+            onClick={uploadDocument}
+            disabled={docUploading || !docFile}
+            className="shrink-0 rounded-control bg-money px-3 py-1.5 text-xs font-medium text-white hover:bg-money-hover disabled:opacity-50"
+          >
+            {docUploading ? 'Uploading…' : 'Upload'}
+          </button>
+        </div>
+        {docError && <p className="mb-3 text-xs text-terra">{docError}</p>}
+        {documents.length === 0 ? (
+          <p className="text-sm text-muted">No documents on file yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {documents.map((doc) => (
+              <div key={doc.id} className="flex items-center justify-between gap-2 border-b border-line pb-2 text-sm last:border-0 last:pb-0">
+                <div className="min-w-0">
+                  <p className="truncate text-ink">{doc.file_name}</p>
+                  <p className="text-xs text-muted">
+                    {DOC_TYPE_LABEL[doc.doc_type] ?? doc.doc_type}
+                    {doc.enrollment_id ? ' · deal' : ' · client'}
+                    {fileSize(doc.size_bytes) ? ` · ${fileSize(doc.size_bytes)}` : ''} · {new Date(doc.created_at).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-3">
+                  {doc.url && (
+                    <a href={doc.url} target="_blank" rel="noreferrer" className="text-xs text-money hover:underline">View</a>
+                  )}
+                  <button
+                    onClick={() => deleteDocument(doc.id)}
+                    disabled={deletingDocIds.has(doc.id)}
+                    className="text-xs text-muted hover:text-terra disabled:opacity-50"
+                  >
+                    {deletingDocIds.has(doc.id) ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
       <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
         <p className="mb-5 text-sm font-medium text-ink">Journey stage</p>
         <JourneyRoadmap stage={borrower.journey_stage} busy={stageBusy} onChange={changeStage} />
@@ -503,7 +872,22 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
       )}
 
       <div className="mb-8 rounded-card border border-line bg-white p-6 shadow-card">
-        <p className="mb-5 text-sm font-medium text-ink">Activity</p>
+        <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium text-ink">Activity</p>
+            {data.churnRisk && data.churnRisk.level !== 'low' && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${data.churnRisk.level === 'high' ? 'bg-terra-tint text-terra' : 'bg-gold-tint text-ink'}`}>
+                {data.churnRisk.level} churn risk
+              </span>
+            )}
+          </div>
+          {data.churnRisk && (
+            <button onClick={explainChurnRisk} disabled={churnNarrativeLoading} className="flex items-center gap-1.5 rounded-control border border-line px-3 py-1.5 text-xs text-ink hover:border-ink/30 disabled:opacity-60">
+              <Sparkles size={13} strokeWidth={1.75} /> {churnNarrativeLoading ? 'Thinking…' : 'Explain risk'}
+            </button>
+          )}
+        </div>
+        {churnNarrative && <div className="mb-4 rounded-control border border-line bg-paper p-4 text-sm text-ink">{churnNarrative}</div>}
         <ActivityTimeline items={activity} loading={activityLoading} />
       </div>
 
@@ -683,12 +1067,50 @@ export default function ClientDetailPage({ params }: { params: { borrowerId: str
                   placeholder="Text this client…"
                   className="flex-1 rounded-control border border-line px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-ink/30 focus:outline-none"
                 />
+                {smsMessages.length > 0 && (
+                  <button onClick={() => suggestReply('sms')} disabled={smsSuggestLoading} title="Suggest a reply" className="flex items-center gap-1 rounded-control border border-line px-2.5 py-2 text-xs text-ink hover:border-ink/30 disabled:opacity-60">
+                    <Sparkles size={13} strokeWidth={1.75} /> {smsSuggestLoading ? '…' : ''}
+                  </button>
+                )}
                 <button onClick={sendSmsMessage} disabled={smsSending || !smsDraft.trim()} className="rounded-control bg-money px-3 py-2 text-xs font-medium text-white hover:bg-money-hover disabled:opacity-50">
                   {smsSending ? 'Sending…' : 'Send'}
                 </button>
               </div>
             </>
           )}
+        </div>
+
+        <div className="rounded-card border border-line bg-white p-6 shadow-card">
+          <p className="mb-3 flex items-center gap-1.5 text-sm font-medium text-ink"><MessageSquare size={14} strokeWidth={1.75} /> Portal messages</p>
+          <div className="max-h-64 space-y-2 overflow-y-auto">
+            {portalMessages.length === 0 ? (
+              <p className="text-sm text-muted">No portal messages yet.</p>
+            ) : (
+              portalMessages.map((m) => (
+                <div key={m.id} className={`max-w-[85%] rounded-control px-3 py-2 text-sm ${m.sender === 'coach' ? 'ml-auto bg-money-tint text-ink' : 'bg-paper text-ink'}`}>
+                  <p>{m.body}</p>
+                  <p className="mt-1 text-[10px] text-muted">{new Date(m.created_at).toLocaleString()}</p>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="mt-3 flex gap-2">
+            <input
+              value={portalDraft}
+              onChange={(e) => setPortalDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') sendPortalMessage(); }}
+              placeholder="Message this client on the portal…"
+              className="flex-1 rounded-control border border-line px-3 py-2 text-sm text-ink placeholder:text-muted focus:border-ink/30 focus:outline-none"
+            />
+            {portalMessages.length > 0 && (
+              <button onClick={() => suggestReply('portal')} disabled={portalSuggestLoading} title="Suggest a reply" className="flex items-center gap-1 rounded-control border border-line px-2.5 py-2 text-xs text-ink hover:border-ink/30 disabled:opacity-60">
+                <Sparkles size={13} strokeWidth={1.75} /> {portalSuggestLoading ? '…' : ''}
+              </button>
+            )}
+            <button onClick={sendPortalMessage} disabled={portalSending || !portalDraft.trim()} className="rounded-control bg-money px-3 py-2 text-xs font-medium text-white hover:bg-money-hover disabled:opacity-50">
+              {portalSending ? 'Sending…' : 'Send'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

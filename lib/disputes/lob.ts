@@ -41,6 +41,11 @@ export async function sendCertifiedLetter(params: {
   borrowerAddress: string; // "line1\ncity, ST zip"
   bureauAddress: string;   // "Bureau Name\nPO Box ...\ncity, ST zip"
   letterBody: string;
+  // Optional org branding (lib/branding.ts) — when set, prints a simple
+  // letterhead above the body instead of the plain unbranded default.
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  fromName?: string | null;
 }): Promise<LobSendResult> {
   const key = process.env.LOB_API_KEY;
   const mockId = `mock_ltr_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
@@ -55,7 +60,13 @@ export async function sendCertifiedLetter(params: {
   const toAddr: LobAddress = { name: to.line0 || 'Credit Bureau', address_line1: to.line1 || to.line0, address_city: to.city, address_state: to.state, address_zip: to.zip };
   const fromAddr: LobAddress = { name: params.borrowerName, address_line1: from.line0, address_city: from.city, address_state: from.state, address_zip: from.zip };
 
-  const file = `<html><body><p style="font-family:Arial;font-size:11pt;white-space:pre-wrap;">${escapeHtml(params.letterBody)}</p></body></html>`;
+  const accent = params.primaryColor || '#0F9D58';
+  const letterhead = params.logoUrl
+    ? `<div style="margin-bottom:24px;border-bottom:2px solid ${accent};padding-bottom:12px;"><img src="${params.logoUrl}" alt="${escapeHtml(params.fromName ?? '')}" style="max-height:40px;" /></div>`
+    : params.fromName
+      ? `<div style="margin-bottom:24px;border-bottom:2px solid ${accent};padding-bottom:12px;font-family:Arial;font-size:13pt;font-weight:bold;color:${accent};">${escapeHtml(params.fromName)}</div>`
+      : '';
+  const file = `<html><body>${letterhead}<p style="font-family:Arial;font-size:11pt;white-space:pre-wrap;">${escapeHtml(params.letterBody)}</p></body></html>`;
 
   try {
     const res = await fetch('https://api.lob.com/v1/letters', {

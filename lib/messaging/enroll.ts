@@ -2,8 +2,9 @@ import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { renderTemplate } from './render';
 import { buildMessageContext } from './context';
-import { getResend, FROM } from '@/lib/resend';
+import { getResend } from '@/lib/resend';
 import { getTwilio, TWILIO_FROM } from '@/lib/sms';
+import { buildFromHeader } from '@/lib/branding';
 
 /**
  * Enroll a client in a campaign. Idempotent — re-enrolling a client already
@@ -118,7 +119,7 @@ async function sendNextStep(enrollment: {
   try {
     let providerMessageId: string | null = null;
     if (step.channel === 'email') {
-      const res = await getResend().emails.send({ from: FROM, to: sendRecord.to_address, subject: subjectRendered ?? '', html: bodyRendered });
+      const res = await getResend().emails.send({ from: await buildFromHeader(enrollment.org_id), to: sendRecord.to_address, subject: subjectRendered ?? '', html: bodyRendered });
       providerMessageId = res.data?.id ?? null;
     } else {
       const msg = await getTwilio().messages.create({ to: sendRecord.to_address, from: TWILIO_FROM, body: bodyRendered });

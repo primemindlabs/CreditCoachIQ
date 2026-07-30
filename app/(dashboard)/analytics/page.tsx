@@ -1,12 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 
 interface AnalyticsData {
   revenue: { mrr: number; activeSubscriptions: number; error?: string };
   outcomes: { totalClients: number; activeClients: number; byStage: Record<string, number>; avgScoreImprovement: number | null; mortgageReadyCount: number };
   timeInStage: { avgDaysByStage: Record<string, number>; sampleSizeByStage: Record<string, number> };
   handoffConversion: { handoffsSent: number; funded: number; declined: number; inProgress: number; conversionRate: number | null };
+  commissions: {
+    paidThisMonth: number; pendingPayout: number; ytdEarnings: number;
+    byPartner: { referralPartnerId: string; partnerName: string; paid: number; pending: number }[];
+  };
 }
 
 const STAGE_LABELS: Record<string, string> = {
@@ -18,8 +22,22 @@ const STAGE_LABELS: Record<string, string> = {
   exited: 'Exited',
 };
 
+interface ProductionGoal {
+  id: string; profileId: string | null; profileName: string | null;
+  metric: 'clients_funded' | 'new_enrollments'; period: 'monthly' | 'quarterly' | 'annual';
+  periodStart: string; targetValue: number; actual: number;
+}
+interface Agent { id: string; first_name: string; last_name: string; role: string }
+
+const METRIC_LABEL: Record<string, string> = { clients_funded: 'Clients funded', new_enrollments: 'New enrollments' };
+
 function currency(n: number): string {
   return n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+}
+
+function firstOfMonth(): string {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
 }
 
 function Card({ label, value, sub }: { label: string; value: string; sub?: string }) {
@@ -36,6 +54,23 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [goals, setGoals] = useState<ProductionGoal[]>([]);
+  const [goalsLoading, setGoalsLoading] = useState(true);
+  const [roster, setRoster] = useState<Agent[]>([]);
+  const [goalForm, setGoalForm] = useState({ profileId: '', metric: 'clients_funded', period: 'monthly', periodStart: firstOfMonth(), targetValue: '' });
+  const [goalSaving, setGoalSaving] = useState(false);
+  const [goalError, setGoalError] = useState<string | null>(null);
+
+  const loadGoals = useCallback(async () => {
+    setGoalsLoading(true);
+    const res = await fetch('/api/goals/production');
+    if (res.ok) {
+      const d = await res.json();
+      setGoals(d.goals ?? []);
+    }
+    setGoalsLoading(false);
+  }, []);
 
   useEffect(() => {
     fetch('/api/analytics')
@@ -54,7 +89,44 @@ export default function AnalyticsPage() {
         setError('Could not reach the server. Check your connection and try again.');
         setLoading(false);
       });
-  }, []);
+    loadGoals();
+    fetch('/api/coach/roster').then((r) => (r.ok ? r.json() : { agents: [] })).then((d) => setRoster(d.agents ?? []));
+  }, [loadGoals]);
+
+  async function addGoal() {
+    if (!goalForm.targetValue || Number(goalForm.targetValue) <= 0) return;
+    setGoalSaving(true);
+    setGoalError(null);
+    try {
+      const res = await fetch('/api/goals/production', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profileId: goalForm.profileId || null,
+          metric: goalForm.metric,
+          period: goalForm.period,
+          periodStart: goalForm.periodStart,
+          targetValue: Number(goalForm.targetValue),
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setGoalError(d.error ?? `Could not save that goal (${res.status}).`);
+        return;
+      }
+      setGoalForm({ profileId: '', metric: 'clients_funded', period: 'monthly', periodStart: firstOfMonth(), targetValue: '' });
+      loadGoals();
+    } catch {
+      setGoalError('Could not reach the server.');
+    } finally {
+      setGoalSaving(false);
+    }
+  }
+
+  async function removeGoal(id: string) {
+    await fetch(`/api/goals/production?id=${id}`, { method: 'DELETE' });
+    loadGoals();
+  }
 
   if (loading) return <p className="text-sm text-muted">Loading…</p>;
   if (error) return <p className="text-sm text-terra">{error}</p>;
@@ -96,7 +168,7 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <div className="rounded-card border border-line bg-white p-6">
+      <div className="mb-8 rounded-card border border-line bg-white p-6">
         <p className="mb-1 text-sm font-medium text-ink">Average time in stage</p>
         <p className="mb-4 text-sm text-muted">Based on completed transitions only — clients still in a stage today aren&apos;t counted until they move.</p>
         {Object.keys(data.timeInStage.avgDaysByStage).length === 0 ? (
@@ -107,6 +179,86 @@ export default function AnalyticsPage() {
               <div key={stage} className="flex justify-between text-sm">
                 <span className="text-ink">{STAGE_LABELS[stage] ?? stage}</span>
                 <span className="text-muted">{days} days avg. (n={data.timeInStage.sampleSizeByStage[stage]})</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Production goals — coach/org-level targets, distinct from per-client
+          financial_goals. Admin-managed here since goal-setting is a
+          leadership/analytics action, not a caseload action. */}
+      <div className="mb-8 rounded-card border border-line bg-white p-6">
+        <p className="mb-4 text-sm font-medium text-ink">Production goals</p>
+        {goalsLoading ? (
+          <p className="text-sm text-muted">Loading…</p>
+        ) : goals.length === 0 ? (
+          <p className="mb-4 text-sm text-muted">No goals set yet.</p>
+        ) : (
+          <div className="mb-5 space-y-4">
+            {goals.map((g) => {
+              const pct = g.targetValue > 0 ? Math.min(100, Math.round((g.actual / g.targetValue) * 100)) : 0;
+              return (
+                <div key={g.id}>
+                  <div className="mb-1 flex items-center justify-between text-sm">
+                    <span className="text-ink">
+                      {METRIC_LABEL[g.metric]} · {g.profileName ?? 'Org-wide'} · {g.period} (from {g.periodStart})
+                    </span>
+                    <span className="flex items-center gap-2 text-muted">
+                      {g.actual} / {g.targetValue}
+                      <button onClick={() => removeGoal(g.id)} className="text-muted hover:text-terra" title="Delete goal">×</button>
+                    </span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-line">
+                    <div className={`h-full rounded-full ${pct >= 100 ? 'bg-money' : 'bg-iris'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-5">
+          <select value={goalForm.profileId} onChange={(e) => setGoalForm({ ...goalForm, profileId: e.target.value })} className="rounded-control border border-line px-2.5 py-2 text-sm">
+            <option value="">Org-wide</option>
+            {roster.map((a) => <option key={a.id} value={a.id}>{a.first_name} {a.last_name}</option>)}
+          </select>
+          <select value={goalForm.metric} onChange={(e) => setGoalForm({ ...goalForm, metric: e.target.value })} className="rounded-control border border-line px-2.5 py-2 text-sm">
+            <option value="clients_funded">Clients funded</option>
+            <option value="new_enrollments">New enrollments</option>
+          </select>
+          <select value={goalForm.period} onChange={(e) => setGoalForm({ ...goalForm, period: e.target.value })} className="rounded-control border border-line px-2.5 py-2 text-sm">
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="annual">Annual</option>
+          </select>
+          <input type="date" value={goalForm.periodStart} onChange={(e) => setGoalForm({ ...goalForm, periodStart: e.target.value })} className="figure rounded-control border border-line px-2.5 py-2 text-sm" />
+          <input type="number" value={goalForm.targetValue} onChange={(e) => setGoalForm({ ...goalForm, targetValue: e.target.value })} placeholder="Target" className="rounded-control border border-line px-2.5 py-2 text-sm" />
+        </div>
+        {goalError && <p className="mt-2 text-xs text-terra">{goalError}</p>}
+        <button onClick={addGoal} disabled={goalSaving || !goalForm.targetValue} className="mt-3 rounded-control bg-money px-4 py-2 text-sm font-medium text-white hover:bg-money-hover disabled:opacity-50">
+          {goalSaving ? 'Saving…' : 'Add goal'}
+        </button>
+      </div>
+
+      {/* Commissions — folded into Analytics as a KPI surface rather than a
+          standalone module, per direction. Reads referral_commission_events,
+          the append-only audit table behind the referral partner program. */}
+      <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <Card label="Commissions paid this month" value={currency(data.commissions.paidThisMonth)} />
+        <Card label="Pending payout" value={currency(data.commissions.pendingPayout)} />
+        <Card label="YTD commission earnings" value={currency(data.commissions.ytdEarnings)} />
+      </div>
+
+      <div className="rounded-card border border-line bg-white p-6">
+        <p className="mb-4 text-sm font-medium text-ink">Commissions by referral partner</p>
+        {data.commissions.byPartner.length === 0 ? (
+          <p className="text-sm text-muted">No commission activity recorded yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {data.commissions.byPartner.map((p) => (
+              <div key={p.referralPartnerId} className="flex items-center justify-between border-b border-line pb-2 text-sm last:border-0 last:pb-0">
+                <span className="text-ink">{p.partnerName}</span>
+                <span className="text-muted">{currency(p.paid)} paid{p.pending > 0 ? ` · ${currency(p.pending)} pending` : ''}</span>
               </div>
             ))}
           </div>

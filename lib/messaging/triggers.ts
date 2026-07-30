@@ -8,7 +8,9 @@ export type TriggerEvent =
   | 'dispute_response_received'
   | 'goal_achieved'
   | 'stack_promo_expiring'
-  | 'loan_ready_reached';
+  | 'loan_ready_reached'
+  | 'lead_lost'
+  | 'stale_lead';
 
 /**
  * Fire an event and auto-enroll the client in every active campaign whose

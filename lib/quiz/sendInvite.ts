@@ -1,8 +1,9 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { issuePortalToken, portalUrl } from '@/lib/portal/token';
-import { getResend, FROM } from '@/lib/resend';
+import { getResend } from '@/lib/resend';
 import { getTwilio, TWILIO_FROM } from '@/lib/sms';
+import { buildFromHeader } from '@/lib/branding';
 
 /**
  * Send (or resend) the pre-call intake quiz to a borrower. Creates/reuses a
@@ -48,7 +49,7 @@ export async function sendQuizInvite(orgId: string, borrowerId: string): Promise
   if (borrower.email && !borrower.email_opt_out) {
     try {
       await getResend().emails.send({
-        from: FROM,
+        from: await buildFromHeader(orgId),
         to: borrower.email as string,
         subject: `Quick prep before your call, ${firstName}`,
         html: `<p>Hi ${firstName},</p><p>Before your consultation, take 2 minutes to complete a short intake quiz so your coach can prep for your specific goals: <a href="${url}">${url}</a></p>${smartCreditUrl ? `<p>If you'd like to pull your credit report first (optional, not required): <a href="${smartCreditUrl}">${smartCreditUrl}</a></p>` : ''}<p>See you soon,<br/>Your CreditCoachIQ team</p>`,

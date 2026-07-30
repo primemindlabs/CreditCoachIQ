@@ -54,18 +54,37 @@ export default function PortalOverviewPage({ params }: { params: { token: string
   const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [ov, plaid] = await Promise.all([
-      fetch(`/api/portal/${token}/overview`).then((r) => r.json()),
-      fetch(`/api/portal/${token}/plaid/accounts`).then((r) => r.json()),
-    ]);
-    setData(ov);
-    setPlaidConfigured(!!plaid.configured);
-    setAccounts(plaid.accounts ?? []);
-    setTransactions(plaid.recentTransactions ?? []);
-    setLoading(false);
+    setError(null);
+    try {
+      const [ovRes, plaidRes] = await Promise.all([
+        fetch(`/api/portal/${token}/overview`),
+        fetch(`/api/portal/${token}/plaid/accounts`),
+      ]);
+      if (!ovRes.ok) {
+        const d = await ovRes.json().catch(() => ({}));
+        setError(d.error ?? `Could not load your dashboard (${ovRes.status}).`);
+        return;
+      }
+      if (!plaidRes.ok) {
+        const d = await plaidRes.json().catch(() => ({}));
+        setError(d.error ?? `Could not load your linked accounts (${plaidRes.status}).`);
+        return;
+      }
+      const ov = await ovRes.json();
+      const plaid = await plaidRes.json();
+      setData(ov);
+      setPlaidConfigured(!!plaid.configured);
+      setAccounts(plaid.accounts ?? []);
+      setTransactions(plaid.recentTransactions ?? []);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, [token]);
 
   useEffect(() => { load(); }, [load]);
@@ -121,14 +140,24 @@ export default function PortalOverviewPage({ params }: { params: { token: string
     setChatMessages(nextMessages);
     setChatInput('');
     setChatLoading(true);
-    const res = await fetch(`/api/portal/${token}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, history: chatMessages }),
-    });
-    const d = await res.json();
-    setChatLoading(false);
-    setChatMessages([...nextMessages, { role: 'assistant', content: res.ok ? d.answer : (d.error ?? 'Something went wrong.') }]);
+    try {
+      const res = await fetch(`/api/portal/${token}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question, history: chatMessages }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setChatMessages([...nextMessages, { role: 'assistant', content: d.error ?? 'Something went wrong.' }]);
+        return;
+      }
+      const d = await res.json();
+      setChatMessages([...nextMessages, { role: 'assistant', content: d.answer }]);
+    } catch {
+      setChatMessages([...nextMessages, { role: 'assistant', content: 'Could not reach the server. Check your connection and try again.' }]);
+    } finally {
+      setChatLoading(false);
+    }
   }
 
   async function linkBank() {
@@ -178,7 +207,7 @@ export default function PortalOverviewPage({ params }: { params: { token: string
   if (loading || !data) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <p className="text-sm text-muted">Loading…</p>
+        {error ? <p className="text-sm text-terra">{error}</p> : <p className="text-sm text-muted">Loading…</p>}
       </div>
     );
   }

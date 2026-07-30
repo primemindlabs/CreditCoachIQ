@@ -8,15 +8,20 @@ export const dynamic = 'force-dynamic';
 
 // Pre-enrollment leads list. A lead is a borrowers row with
 // lead_status != 'converted' — see migration 0013 for why this isn't a
-// separate table.
+// separate table. Superseded as the primary listing UI by
+// /api/coach/clients?segment=leads, but kept live (and correctly scoped)
+// since it's still a reachable route.
 export const GET = withErrorHandling(async function GET(req: Request) {
-  const { userId, orgId } = await getOrgContext();
+  const { userId, orgId, role } = await getOrgContext();
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get('status');
 
   const sb = createAdminClient();
+  const { data: profile } = await sb.from('profiles').select('id').eq('clerk_user_id', userId).maybeSingle();
+  const scopeToSelf = !(hasPermission(role, 'manage_caseload') && searchParams.get('all') === 'true');
+
   let query = sb
     .from('borrowers')
     .select('id, first_name, last_name, email, phone, lead_status, interest_level, lead_source, last_contacted_at, assigned_agent_id, referred_by_partner_id, created_at')
@@ -24,6 +29,7 @@ export const GET = withErrorHandling(async function GET(req: Request) {
     .neq('lead_status', 'converted')
     .order('created_at', { ascending: false });
   if (status) query = query.eq('lead_status', status);
+  if (scopeToSelf && profile?.id) query = query.eq('assigned_agent_id', profile.id);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

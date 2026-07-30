@@ -34,10 +34,21 @@ export default function ReferralPartnersPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/referral-partners');
-    const data = await res.json();
-    setPartners(data.partners ?? []);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await fetch('/api/referral-partners');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not load referral partners (${res.status}).`);
+        return;
+      }
+      const data = await res.json();
+      setPartners(data.partners ?? []);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

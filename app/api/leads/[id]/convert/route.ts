@@ -21,7 +21,7 @@ export const POST = withErrorHandling(async function POST(req: Request, { params
   if (!userId || !orgId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   if (!hasPermission(role, 'manage_intake')) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
-  const body = (await req.json().catch(() => ({}))) as { targetScore?: number; state?: string };
+  const body = (await req.json().catch(() => ({}))) as { targetScore?: number; state?: string; overrideStateWarning?: boolean };
 
   const sb = createAdminClient();
   const { data: borrower } = await sb
@@ -33,11 +33,22 @@ export const POST = withErrorHandling(async function POST(req: Request, { params
 
   const state = (body.state ?? (borrower.state as string | null))?.toUpperCase();
 
-  // Same CROA state-registration gate as /api/enroll — fail closed.
-  if (state) {
+  // State credit-services-organization registration check — softened from a
+  // hard block to a confirm-to-proceed warning (2026-07-29 decision). Many
+  // states require in-state registration/bonding for credit repair AND
+  // credit coaching services (CROA's federal definition covers "advice or
+  // assistance," not just direct dispute filing, so the coaching framing
+  // alone doesn't exempt this) — but rather than silently blocking a
+  // conversion, a coach now sees the warning and has to explicitly confirm
+  // they want to proceed anyway. This does NOT waive the underlying legal
+  // requirement; it only changes who makes the call and when.
+  if (state && !body.overrideStateWarning) {
     const { data: compliance } = await sb.from('state_compliance_status').select('active_clients_allowed').eq('org_id', orgId).eq('state', state).maybeSingle();
     if (!compliance?.active_clients_allowed) {
-      return NextResponse.json({ error: `Not yet registered to serve clients in ${state}. Update state_compliance_status before converting this lead.` }, { status: 403 });
+      return NextResponse.json({
+        warning: 'state_not_registered',
+        error: `Not yet registered to serve clients in ${state}. Confirm you want to convert anyway, or update state_compliance_status first.`,
+      }, { status: 409 });
     }
   }
 
@@ -80,7 +91,8 @@ export const POST = withErrorHandling(async function POST(req: Request, { params
   await sb.from('borrowers').update({ lead_status: 'converted', state: state ?? null }).eq('id', borrower.id);
   await sb.from('credit_repair_org_settings').upsert({ org_id: orgId }, { onConflict: 'org_id', ignoreDuplicates: true });
   await sb.from('lead_activity_log').insert({
-    org_id: orgId, borrower_id: borrower.id, type: 'status_change', body: 'Converted to enrolled client',
+    org_id: orgId, borrower_id: borrower.id, type: 'status_change',
+    body: body.overrideStateWarning ? `Converted to enrolled client (state registration warning overridden for ${state})` : 'Converted to enrolled client',
   });
 
   void fireTrigger(orgId, 'client_enrolled', { borrowerId: borrower.id as string });

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 
 interface Template { id: string; name: string; channel: 'email' | 'sms'; subject: string | null }
@@ -31,16 +31,31 @@ export default function CampaignBuilderPage() {
   const [newDelay, setNewDelay] = useState(24);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    const [campRes, tplRes] = await Promise.all([fetch(`/api/campaigns/${id}`), fetch('/api/templates')]);
-    const campData = await campRes.json();
-    const tplData = await tplRes.json();
-    setCampaign(campData.campaign);
-    setSteps((campData.steps ?? []).map((s: Step) => ({ ...s })));
-    setTemplates(tplData.templates ?? []);
-  }
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const [campRes, tplRes] = await Promise.all([fetch(`/api/campaigns/${id}`), fetch('/api/templates')]);
+      if (!campRes.ok) {
+        const d = await campRes.json().catch(() => ({}));
+        setError(d.error ?? `Could not load this campaign (${campRes.status}).`);
+        return;
+      }
+      if (!tplRes.ok) {
+        const d = await tplRes.json().catch(() => ({}));
+        setError(d.error ?? `Could not load templates (${tplRes.status}).`);
+        return;
+      }
+      const campData = await campRes.json();
+      const tplData = await tplRes.json();
+      setCampaign(campData.campaign);
+      setSteps((campData.steps ?? []).map((s: Step) => ({ ...s })));
+      setTemplates(tplData.templates ?? []);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    }
+  }, [id]);
 
-  useEffect(() => { load(); }, [id]);
+  useEffect(() => { load(); }, [load]);
 
   function onDragStart(index: number) { setDragIndex(index); }
   function onDragOver(e: React.DragEvent, index: number) {
@@ -133,7 +148,13 @@ export default function CampaignBuilderPage() {
     }
   }
 
-  if (!campaign) return <p className="text-sm text-muted">Loading…</p>;
+  if (!campaign) {
+    return error ? (
+      <div className="rounded-control border border-terra/30 bg-terra-tint px-4 py-3 text-sm text-terra">{error}</div>
+    ) : (
+      <p className="text-sm text-muted">Loading…</p>
+    );
+  }
 
   return (
     <div>

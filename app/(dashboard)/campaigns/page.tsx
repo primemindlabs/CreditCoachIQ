@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 
 type TriggerType = 'manual' | 'client_enrolled' | 'journey_stage_enter' | 'dispute_response_received' | 'goal_achieved' | 'stack_promo_expiring' | 'loan_ready_reached' | 'scheduled';
@@ -40,15 +40,26 @@ export default function CampaignsPage() {
   const [triggerType, setTriggerType] = useState<TriggerType>('manual');
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true);
-    const res = await fetch('/api/campaigns');
-    const data = await res.json();
-    setCampaigns(data.campaigns ?? []);
-    setLoading(false);
-  }
+    setError(null);
+    try {
+      const res = await fetch('/api/campaigns');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not load campaigns (${res.status}).`);
+        return;
+      }
+      const data = await res.json();
+      setCampaigns(data.campaigns ?? []);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   async function createCampaign() {
     if (!name.trim()) return;

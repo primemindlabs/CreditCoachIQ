@@ -639,7 +639,8 @@ CREATE TABLE IF NOT EXISTS campaigns (
   trigger_type    text NOT NULL DEFAULT 'manual'
                   CHECK (trigger_type IN (
                     'manual', 'client_enrolled', 'journey_stage_enter', 'dispute_response_received',
-                    'goal_achieved', 'stack_promo_expiring', 'loan_ready_reached', 'scheduled'
+                    'goal_achieved', 'stack_promo_expiring', 'loan_ready_reached', 'scheduled',
+                    'lead_lost', 'stale_lead' -- added 0016_lead_lost_stale_lead_triggers.sql
                   )),
   trigger_config  jsonb NOT NULL DEFAULT '{}',
   status          text NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'active', 'paused', 'archived')),
@@ -1188,3 +1189,107 @@ ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS notes text;
 
 -- 0015_coach_notes_activity.sql
 ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS coach_notes text;
+-- 0017_borrower_mailing_address.sql
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS address_line1 text;
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS address_line2 text;
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS city text;
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS postal_code text;
+
+-- 0018_document_vault_branding_saved_views.sql
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('borrower-documents', 'borrower-documents', false)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS borrower_documents (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id        uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  borrower_id   uuid NOT NULL REFERENCES borrowers(id) ON DELETE CASCADE,
+  enrollment_id uuid REFERENCES credit_repair_enrollments(id) ON DELETE SET NULL,
+  doc_type      text NOT NULL CHECK (doc_type IN (
+                  'government_id', 'proof_of_income', 'bank_statement', 'croa_disclosure',
+                  'dispute_correspondence', 'credit_report', 'business_formation', 'ein_letter',
+                  'voided_check', 'other'
+                )),
+  storage_path  text NOT NULL,
+  file_name     text NOT NULL,
+  mime_type     text,
+  size_bytes    bigint,
+  uploaded_by   uuid REFERENCES profiles(id),
+  deleted_at    timestamptz,
+  created_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_borrower_documents_borrower ON borrower_documents(org_id, borrower_id) WHERE deleted_at IS NULL;
+ALTER TABLE borrower_documents ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "borrower_documents_org" ON borrower_documents
+  FOR ALL USING (org_id = public.get_org_id()) WITH CHECK (org_id = public.get_org_id());
+
+ALTER TABLE credit_repair_org_settings ADD COLUMN IF NOT EXISTS brand_logo_url text;
+ALTER TABLE credit_repair_org_settings ADD COLUMN IF NOT EXISTS brand_primary_color text;
+ALTER TABLE credit_repair_org_settings ADD COLUMN IF NOT EXISTS brand_from_name text;
+
+CREATE TABLE IF NOT EXISTS saved_views (
+  id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id      uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  profile_id  uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  name        text NOT NULL,
+  segment     text NOT NULL,
+  filters     jsonb NOT NULL DEFAULT '{}',
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (profile_id, name)
+);
+ALTER TABLE saved_views ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "saved_views_org" ON saved_views
+  FOR ALL USING (org_id = public.get_org_id()) WITH CHECK (org_id = public.get_org_id());
+
+-- 0019_production_goals.sql
+CREATE TABLE IF NOT EXISTS production_goals (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id        uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  profile_id    uuid REFERENCES profiles(id) ON DELETE CASCADE,
+  metric        text NOT NULL CHECK (metric IN ('clients_funded', 'new_enrollments')),
+  period        text NOT NULL CHECK (period IN ('monthly', 'quarterly', 'annual')),
+  period_start  date NOT NULL,
+  target_value  numeric(12,2) NOT NULL CHECK (target_value > 0),
+  created_by    uuid REFERENCES profiles(id) ON DELETE SET NULL,
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_production_goals_org ON production_goals(org_id, period_start DESC);
+ALTER TABLE production_goals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "production_goals_org" ON production_goals
+  FOR ALL USING (org_id = public.get_org_id()) WITH CHECK (org_id = public.get_org_id());
+
+DROP TRIGGER IF EXISTS trg_production_goals_updated_at ON production_goals;
+CREATE TRIGGER trg_production_goals_updated_at BEFORE UPDATE ON production_goals
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- 0020_embed_lead_capture.sql
+ALTER TABLE credit_repair_org_settings ADD COLUMN IF NOT EXISTS embed_enabled boolean NOT NULL DEFAULT false;
+ALTER TABLE credit_repair_org_settings ADD COLUMN IF NOT EXISTS embed_slug text UNIQUE;
+ALTER TABLE credit_repair_org_settings ADD COLUMN IF NOT EXISTS embed_headline text;
+ALTER TABLE borrowers ADD COLUMN IF NOT EXISTS lead_referrer text;
+
+-- 0021_google_calendar_sync.sql
+CREATE TABLE IF NOT EXISTS coach_calendar_connections (
+  id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  org_id          uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
+  profile_id      uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  provider        text NOT NULL DEFAULT 'google' CHECK (provider IN ('google')),
+  access_token_encrypted  text NOT NULL,
+  refresh_token_encrypted text NOT NULL,
+  token_expires_at timestamptz NOT NULL,
+  calendar_id     text NOT NULL DEFAULT 'primary',
+  connected_email text,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  updated_at      timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (org_id, profile_id, provider)
+);
+ALTER TABLE coach_calendar_connections ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "coach_calendar_connections_org" ON coach_calendar_connections
+  FOR ALL USING (org_id = public.get_org_id()) WITH CHECK (org_id = public.get_org_id());
+
+DROP TRIGGER IF EXISTS trg_coach_calendar_connections_updated_at ON coach_calendar_connections;
+CREATE TRIGGER trg_coach_calendar_connections_updated_at BEFORE UPDATE ON coach_calendar_connections
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+ALTER TABLE call_bookings ADD COLUMN IF NOT EXISTS google_event_id text;

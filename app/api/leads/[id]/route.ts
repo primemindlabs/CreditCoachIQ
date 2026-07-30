@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getOrgContext } from '@/lib/auth/orgContext';
 import { hasPermission } from '@/lib/auth/permissions';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { fireTrigger } from '@/lib/messaging/triggers';
 import { withErrorHandling } from '@/lib/api/withErrorHandling';
 
 export const dynamic = 'force-dynamic';
@@ -33,6 +34,8 @@ export const PATCH = withErrorHandling(async function PATCH(req: Request, { para
       org_id: orgId, borrower_id: params.id, actor_id: profile?.id ?? null,
       type: 'status_change', body: `Status changed to ${body.status}`,
     });
+    // Win-back nurture — fire-and-forget, never blocks the status update itself.
+    if (body.status === 'lost') void fireTrigger(orgId, 'lead_lost', { borrowerId: params.id });
   }
   if (body.note?.trim()) {
     await sb.from('lead_activity_log').insert({

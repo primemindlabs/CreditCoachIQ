@@ -41,13 +41,31 @@ export default function ComplaintsPage() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [c, cl] = await Promise.all([
-      fetch('/api/compliance/complaints').then((r) => r.json()),
-      fetch('/api/coach/caseload?all=true').then((r) => r.json()),
-    ]);
-    setComplaints(c.complaints ?? []);
-    setClients(cl.clients ?? []);
-    setLoading(false);
+    setError(null);
+    try {
+      const [complaintsRes, clientsRes] = await Promise.all([
+        fetch('/api/compliance/complaints'),
+        fetch('/api/coach/caseload?all=true'),
+      ]);
+      if (!complaintsRes.ok) {
+        const d = await complaintsRes.json().catch(() => ({}));
+        setError(d.error ?? `Could not load complaints (${complaintsRes.status}).`);
+        return;
+      }
+      if (!clientsRes.ok) {
+        const d = await clientsRes.json().catch(() => ({}));
+        setError(d.error ?? `Could not load clients (${clientsRes.status}).`);
+        return;
+      }
+      const c = await complaintsRes.json();
+      const cl = await clientsRes.json();
+      setComplaints(c.complaints ?? []);
+      setClients(cl.clients ?? []);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => { load(); }, [load]);

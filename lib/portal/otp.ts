@@ -1,7 +1,8 @@
 import 'server-only';
 import crypto from 'crypto';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getResend, FROM } from '@/lib/resend';
+import { getResend } from '@/lib/resend';
+import { buildFromHeader } from '@/lib/branding';
 
 /**
  * GLBA Safeguards Rule step-up MFA for the client portal (16 CFR 314.4(c)(5)
@@ -54,7 +55,7 @@ export async function issueOtpChallenge(
 
   try {
     await getResend().emails.send({
-      from: FROM,
+      from: await buildFromHeader(orgId),
       to: borrower.email as string,
       subject: 'Your CreditCoachIQ verification code',
       html: `<p>Hi ${(borrower.first_name as string) ?? 'there'},</p><p>Your verification code is:</p><p style="font-size:28px;font-weight:600;letter-spacing:4px;">${code}</p><p>This code expires in 10 minutes. If you didn't request this, you can safely ignore this email — your portal access is not at risk.</p>`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 
 interface Template { id: string; name: string; channel: 'email' | 'sms'; subject: string | null; body: string }
@@ -18,12 +18,22 @@ export default function TemplatesPage() {
   const [drafting, setDrafting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
-    const res = await fetch('/api/templates');
-    const data = await res.json();
-    setTemplates(data.templates ?? []);
-  }
-  useEffect(() => { load(); }, []);
+  const load = useCallback(async () => {
+    setError(null);
+    try {
+      const res = await fetch('/api/templates');
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not load templates (${res.status}).`);
+        return;
+      }
+      const data = await res.json();
+      setTemplates(data.templates ?? []);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    }
+  }, []);
+  useEffect(() => { load(); }, [load]);
 
   async function create() {
     if (!name.trim() || !body.trim()) return;
@@ -53,16 +63,26 @@ export default function TemplatesPage() {
   async function draftWithAI() {
     if (!draftPurpose.trim() || drafting) return;
     setDrafting(true);
-    const res = await fetch('/api/templates/draft', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ purpose: draftPurpose.trim(), channel }),
-    });
-    const d = await res.json();
-    setDrafting(false);
-    if (!res.ok) return;
-    if (d.subject) setSubject(d.subject);
-    setBody(d.body);
+    setError(null);
+    try {
+      const res = await fetch('/api/templates/draft', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ purpose: draftPurpose.trim(), channel }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setError(d.error ?? `Could not draft this template (${res.status}).`);
+        return;
+      }
+      const d = await res.json();
+      if (d.subject) setSubject(d.subject);
+      setBody(d.body);
+    } catch {
+      setError('Could not reach the server. Check your connection and try again.');
+    } finally {
+      setDrafting(false);
+    }
   }
 
   return (
