@@ -23,7 +23,7 @@
     "lucide-react": "^0.383.0",
     "clsx": "^2.1.1",
     "tailwind-merge": "^2.5.4",
-    "resend": "^4.0.1",
+    "resend": "^6.18.1",
     "twilio": "^5.3.5",
     "pdf-lib": "^1.17.1"
   },
